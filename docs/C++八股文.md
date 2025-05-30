@@ -74,20 +74,20 @@
   * 默认初始化为0
 
 * **修饰普通函数**
-  * 仅在定义该函数的文件内才能使用
+  * **仅在定义该函数的文件内才能使用**
   * 在多人开发项目时，为了防止与他人命名空间里的函数重名，可以将函数定位为 static
 
-* 修饰成员变量：**静态成员变量**
+* **修饰成员变量**：**静态成员变量**
   * 类中，使用static修饰的成员变量
   * 所有类的对象，**共享**同一个静态成员变量的副本，该变量为所有对象所有
-  * 类内声明，必须在类外部单独定义，以便为其分配存储空间，static修饰的变量先于对象存在
+  * **类内声明，必须在类外部单独定义**，以便为其分配存储空间，static修饰的变量先于对象存在
   * 可以被非static成员函数任意访问
   * 函数体内static变量的作用范围为该函数体，该变量内存只被分配一次，因此其值在下次调用时仍维持上次的值
   * 模块内static全局变量，可以被模块内所有函数访问，不能被模块外其他函数访问
 
-* 修饰成员函数：**静态函数**
+* **修饰成员函数**：**静态函数**
   * 类内部使用static修饰的成员函数
-  * **属于类**，而不属于类的对象，可以通过类名直接调用，无需创建对象
+  * **属于类**，而不属于类的对象，**可以通过类名直接调用**，无需创建对象
   * 所以静态成员函数**没有this指针**（this指针是指向本对象的指针），只能访问static类成员
   * 不能被virtual修饰（不能作为虚函数，因为没有this指针）
   * 不能被声明为const、虚函数、volatil
@@ -157,23 +157,80 @@ inline int A::doA() { return 0; }   // 需要显式内联
 
 
 
-## define宏
+## #define宏
 
-定义预编译时处理的宏
+> 预处理器是一些指令，指示编译器在**实际编译之前**所需完成的预处理。
+>
+> 所有的预处理器指令都是以井号（#）开头，预处理指令不是 C++ 语句，所以它们不会以分号（;）结尾。
+>
+> 预处理指令包括比如 #include、#define、#if、#else、#line 等。
 
-只是简单的字符串替换，无类型检查，不安全
+#define 用于创建**符号常量**，该符号常量称为**宏**。
 
-在编译的预处理阶段
+是预处理指令，在**预编译时**处理宏
 
-```c++
-#define MAX(a,b) (a)>(b)?(a):(b)
+只是简单的**字符串替换**，无类型检查，不安全
 
-result = MAX(i,j)+2;
-//被预处理器扩展为 
-result = (i)>(j)?(i):(j)+2;
-```
+~~~c++
+#define macro-name replacement-text 
+// 在该文件中后续出现的所有宏（macro-name），都会在编译之前被替换为replacement-text
+~~~
 
-------
+**参数宏**
+
+~~~c++
+#include <iostream>
+using namespace std;
+
+// 带有参数的宏 MIN()
+#define MIN(a,b) (a<b ? a : b)
+ 
+int main ()
+{
+   int i, j;
+   i = 100;
+   j = 30;
+   cout <<"较小的值为：" << MIN(i, j) << endl; // 输出30
+   // MIN(i,j)被预处理器展开为：(i < j ? i : j)
+
+   return 0;
+}
+~~~
+
+在 C/C++ 预处理器中，**宏定义默认只能写在一行内**。**如果有多行，每行结尾要加 “ \\"**
+
+~~~c++
+#define LOG_INFO(logmsgFormat, ...) \
+    do { \
+        Logger &logger = Logger::instance(); \
+        logger.setLogLevel(INFO); \
+        char buf[1024] = {0}; \
+        snprintf(buf, 1024, logmsgFormat, ##__VA_ARGS__); \
+        logger.log(buf); \
+    } while(0)
+
+~~~
+
+如果不加 `\`，编译器会**把换行当作宏定义的结束**，导致编译错误。
+
+~~~c++
+#define LOG_INFO(logmsgFormat, ...)  // 这里的宏在换行后就结束了
+do { 
+    Logger &logger = Logger::instance();  // 这里的代码不会被认为是宏的一部分
+    logger.setLogLevel(INFO);
+    char buf[1024] = {0};
+    snprintf(buf, 1024, logmsgFormat, ##__VA_ARGS__);
+    logger.log(buf);
+} while(0)
+~~~
+
+
+
+
+
+
+
+
 
 
 
