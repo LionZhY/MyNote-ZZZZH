@@ -1738,3 +1738,113 @@ std::shared_ptr<T> weak_ptr<T>::lock() const noexcept;
 
 
 
+
+
+
+
+## Lambda
+
+C++11提供了对**匿名函数**的支持，称为 **Lambda 函数**（也叫 Lambda 表达式）。
+
+Lambda表达式**把函数看做对象**。Lambda表达式可以像对象一样使用。
+
+~~~c++
+[capture](parameters)->return-type{function body}
+
+// capture 捕获的外部变量列表，可以为空
+// parameters 形参列表，可以省略，表示无参数
+// return-type 返回类型，可以省略，省略时根据函数体的return语句返回类型确定，无return就返回类型void
+// body 函数体
+
+// 例如
+[](int x, int y){return x < y;}
+[](int x, int y) ->int{ int z = x + y; return z + x};
+~~~
+
+如果Lambda函数没有返回值（如void），其返回类型可被完全忽略。
+
+在Lambda表达式内，`[]`可以访问当前作用域的变量，这是Lambda表达式的闭包行为。
+
+C++变量传递有传值和传引用的区别，可以通过前面的 [ ] 来指定：
+
+ **`[]`  不捕获外部任何变量，沒有定义任何变量。使用未定义变量会引发错误。**
+
+~~~C++
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    int i = 1;
+    auto func = [](int i) { cout << i << endl; }; // 有一个形参i
+    func(i);
+}
+~~~
+
+**`[=]`  捕获外部作用域所有变量的值，只读无法修改**
+任何被使用到的外部变量，都隐式地以传值方式加以引用
+
+~~~C++
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    int i = 1;
+    auto func = [=]() { cout << i << endl; }; // 没有形参，而且直接捕获的i的值
+    func();
+}
+~~~
+
+**[&] 捕获外部作用域所有变量的引用，引用捕获，可修改捕获的变量**
+任何被使用到的外部变量都隐式地以引用方式加以引用
+
+~~~C++
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    int i = 1;
+    auto func = [&]() { // 没有形参，而且直接捕获的i的引用
+		cout << "修改前，i = " << i << endl;
+		i++;
+	};
+    func();
+	cout << "修改后，i = " << i << endl;
+}
+
+// 输出
+修改前，i = 1
+修改后，i = 2
+~~~
+
+**[var] 只捕获外部变量var的值，只读无法修改**
+
+**[&var] 只捕获外部变量var的引用，可修改**
+
+**[=, &] 混合方式**
+
+~~~C++
+#include <iostream>
+using namespace std;
+
+int main()
+{
+    int i = 1;
+	int j = 2;
+    
+	// [&, =j]() { // 变量j值方式捕获，其余变量捕获引用
+    
+    auto func = [=, &i]() { // 变量i引用方式捕获，其余变量值方式捕获
+		cout << "j = " << j << endl;
+		i++;
+	};
+    func();
+	cout << "i = " << i << endl;
+}
+
+~~~
+
+
+

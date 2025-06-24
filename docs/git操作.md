@@ -73,7 +73,7 @@ git commit -m "提交信息"
 # git remote <远程仓库名称> <远程仓库URL>   远程仓库名称默认是origin
 git remote add origin https://github.com/LionZhY/MyNote-ZZZZH.git
 
-# 可以修改为ssh远程
+# 可以修改为ssh远程 （推荐）
 git remote set-url origin git@github.com:LionZhY/muduo-learning.git
 
 # 验证是否关联成功
@@ -279,5 +279,4 @@ clone远程仓库
 列出标签
 
 `git tag`
-
 

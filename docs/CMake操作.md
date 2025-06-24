@@ -173,7 +173,7 @@ MyProject/
 - `mylib.h`：库头文件。
 - `CMakeLists.txt`：CMake 配置文件
 
-#### 创建CMakeLists.txt：
+### 创建CMakeLists.txt：
 
 ~~~shell
 cmake_minimum_required(VERSION 3.10)   # 指定最低 CMake 版本
@@ -195,7 +195,7 @@ add_executable(MyExecutable src/main.cpp) # 创建一个名为MyExecutable可执
 target_link_libraries(MyExecutable MyLib) 
 ~~~
 
-#### 创建构建目录
+### 创建构建目录
 
 打开终端，进入 MyProject 目录，然后创建构建目录：
 
@@ -204,7 +204,7 @@ mkdir build
 cd build
 ~~~
 
-#### 配置项目
+### 配置项目
 
 在构建目录（build）中运行 CMake 配置命令，生成适合平台的构建系统文件（如 Makefile）：
 
@@ -212,7 +212,7 @@ cd build
 cmake ..
 ~~~
 
-#### 编译项目
+### 编译项目
 
 使用生成的构建系统文件编译项目。（如果是Makefile，使用make命令进行编译）
 
@@ -222,7 +222,7 @@ make
 
 编译项目并生成可执行文件 `MyExecutable`
 
-#### 运行可执行文件
+### 运行可执行文件
 
 编译完成后，在构建目录（build）中，运行生成的可执行文件 `MyExecutable`
 
@@ -230,7 +230,7 @@ make
 ./MyExecutable
 ~~~
 
-#### 清理构建文件
+### 清理构建文件
 
 清理构建文件以删除生成的中间文件和目标文件。
 
