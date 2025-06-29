@@ -70,21 +70,24 @@ git commit -m "提交信息"
 本地仓库关联远程仓库
 
 ~~~shell
-# git remote <远程仓库名称> <远程仓库URL>   远程仓库名称默认是origin
-git remote add origin https://github.com/LionZhY/MyNote-ZZZZH.git
-
-# 可以修改为ssh远程 （推荐）
-git remote set-url origin git@github.com:LionZhY/muduo-learning.git
+# git remote add <远程仓库名称> <远程仓库URL>   远程仓库名称默认是origin
+git remote add origin https://github.com/LionZhY/MyNote-ZZZZH.git #https
+git remote add origin git@github.com:LionZhY/MyNote-ZZZZH.git #ssh推荐
 
 # 验证是否关联成功
 git remote -v
+
+# 如果一开始设置的是https连接，可以修改为ssh远程 （推荐）
+git remote set-url origin git@github.com:LionZhY/MyNote-ZZZZH.git
 ~~~
 
 **git推送到远程仓库**
 
 ~~~shell
-git branch -M main # 重命名当前分支为main（更符合新的标准）
-git push -u origin main #本地main分支，推送到远程，并关联origin/main分支
+git branch -M main # 重命名当前分支为main（更符合新的标准）（可省略）
+
+#将本地分支 main 推送到远程仓库 origin，并关联远程的 main 分支
+git push -u origin main 
 
 # 以后再push/pull
 # 直接
