@@ -203,6 +203,16 @@ git commit --only src/CurrentThread.cpp -m "Update CurrentThread.cpp"
 
 `git commit -m “提交信息”`
 
+如果只是修改了一些已有的文件（已经add过的）
+
+~~~shell
+git commit -a
+~~~
+
+
+
+
+
 
 
 ## 分支
