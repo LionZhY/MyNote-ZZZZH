@@ -44,3 +44,44 @@
 | `std::function`   | `std`        | `<functional>` | C++11        |
 | `std::bind`       | `std`        | `<functional>` | C++11        |
 | `std::move`       | `std`        | `<utility>`    | C++11        |
+
+
+
+
+
+## 大顶堆，小顶堆
+
+在 C++ STL 中，默认的 `priority_queue` 是 **大顶堆**（大的元素在前）
+
+ 如果你想要一个最小堆，必须让比较函数“反过来”，比如int类型
+
+~~~C++
+auto cmp = [](int a, int b) { return a > b; }; // 小的优先
+std::priority_queue<int, std::vector<int>, decltype(cmp)> minHeap(cmp);
+~~~
+
+在 C++ STL 的 `priority_queue` 中，**比较函数 `cmp(a, b)` 的语义是**：
+
+> “如果 `cmp(a, b)` 为 `true`，则认为 `a` 的优先级**低于** `b`，所以 `a` 会在 `b` 的**后面**。”
+
+所以 `return a > b;` 表示 `a > b`时，返回true，大的数在后面，小的数在前。
+
+
+
+**默认写法（最大堆）**
+
+~~~C++
+std::priority_queue<int> maxHeap;  // 最大堆，大的优先（使用 less<int>）
+~~~
+
+
+
+**小顶堆写法**
+
+~~~C++
+std::priority_queue<int, std::vector<int>, decltype(cmp)> minHeap(cmp);
+~~~
+
+定义一个**最小堆**类型的 `priority_queue`，元素类型为 `int`，底层容器为 `vector<int>`，排序规则由一个叫 `cmp` 的比较函数决定。
+
+`decltype(expr)` 是 C++11 中的一个**类型推导工具**，表示“**expr 的类型**”。

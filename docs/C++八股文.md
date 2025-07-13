@@ -1757,8 +1757,12 @@ Lambda表达式**把函数看做对象**。Lambda表达式可以像对象一样�
 // body 函数体
 
 // 例如
-[](int x, int y){return x < y;}
-[](int x, int y) ->int{ int z = x + y; return z + x};
+[](int x, int y){ return x < y; }
+
+[](int x, int y) ->int{ 
+    int z = x + y; 
+    return z + x
+};
 ~~~
 
 如果Lambda函数没有返回值（如void），其返回类型可被完全忽略。
