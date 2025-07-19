@@ -170,3 +170,149 @@ gdb /home/zhangyan/projects/muduo-learning/src/Timestamp
 
    
 
+
+
+## vscode + clangd + c++23
+
+### clangd [安装](https://blog.csdn.net/qq_42764906/article/details/135541847)
+
+> [关于在Vscode安装clangd的教程](https://blog.csdn.net/qq_42764906/article/details/135541847) 
+>
+> [clang 在 Windows 下的安装教学](https://zhuanlan.zhihu.com/p/663843824) 
+
+**配置vscode使用clangd，而非默认插件**
+
+`.\vscode\settings.json`
+
+![image-20250717111818132](pic/image-20250717111818132.png)
+
+win
+
+~~~json
+{
+  "C_Cpp.intelliSenseEngine": "disabled", // 禁用微软自带的 C++ IntelliSense 引擎
+  "C_Cpp.autocomplete": "disabled", // 屏蔽默认 C++ 插件的自动补全
+  "clangd.arguments": [
+    "--compile-commands-dir=.", // 指定 compile_commands.json 的目录为当前工作目录（项目根目录）
+    "--header-insertion=never"  // 禁止 clangd 自动插入 #include 头文件
+  ],
+  "clangd.path": "D:\\clangd llvm install\\LLVM\\bin\\clangd.exe",  // 指定 clangd 的路径
+  "files.associations": { // 将 .tcc 和 .ipp 这些扩展名文件视作 C++ 文件处理
+    "*.tcc": "cpp",
+    "*.ipp": "cpp"
+  }
+}
+~~~
+
+
+
+Ubuntu
+
+~~~json
+{
+    "C_Cpp.intelliSenseEngine": "disabled", // 禁用微软自带的 C++ IntelliSense 引擎
+    "C_Cpp.autocomplete": "disabled", // 屏蔽默认 C++ 插件的自动补全
+    "clangd.arguments": [
+      "--compile-commands-dir=.", // 指定 compile_commands.json 的目录为当前工作目录（项目根目录）
+      "--header-insertion=never"  // 禁止 clangd 自动插入 #include 头文件
+    ],
+    "clangd.path": "/usr/bin/clangd-14",  // 指定 clangd 的路径
+    "files.associations": { // 将 .tcc 和 .ipp 这些扩展名文件视作 C++ 文件处理
+      "*.tcc": "cpp",
+      "*.ipp": "cpp"
+    }   
+
+}
+~~~
+
+
+
+
+
+### clangd 配置compile_commands.json
+
+配置 `compile_commands.json`（需要使用 **CMake** 来构建项目）
+
+> `compile_commands.json`是一个 由 CMake 或其他构建系统生成的 JSON 文件，内容是该项目中每个 `.cpp` 文件的具体编译命令。当你打开 VS Code，并且启用了 `clangd` 插件时，Clangd 会：
+>
+> 1. 自动在当前目录或父目录中查找 `compile_commands.json`；
+> 2. 解析出每个 `.cpp` 对应的 `-I` 参数、宏、标准等；
+> 3. 用这些真实的参数来进行语法分析、补全、跳转、诊断。
+
+**创建构建目录：**
+
+~~~shell
+# 在项目根目录下
+mkdir build
+cd build
+~~~
+
+**使用 CMake 配置工程，生成 `compile_commands.json`**
+
+~~~shell
+# 在 build/ 目录中
+cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+~~~
+
+此时，`build/` 目录中会生成一个文件：`build/compile_commands.json` 
+
+**（可选）将 `compile_commands.json` 复制到项目根目录**
+
+~~~shell
+cp build/compile_commands.json .
+~~~
+
+Clangd 默认只会在“当前工作目录”或上层目录查找该文件。
+
+**重启 Clangd 服务**
+
+Ctrl + Shift + P → Clangd: Restart Language Server
+
+
+
+
+
+### c++23
+
+**项目根目录下 CMakeLists**
+
+![image-20250716165804011](pic/image-20250716165804011.png)
+
+~~~
+cmake_minimum_required(VERSION 3.15)
+project(Dummy)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# 仅用来生成编译信息
+add_executable(dummy hot100/lc01.cpp)
+~~~
+
+
+
+**终端执行**
+
+~~~shell
+cmake -S . -B build
+# 或者
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+~~~
+
+会在build下生成 `compile_commands.json`，并复制到项目根目录下：
+
+![image-20250716170635920](pic/image-20250716170635920.png)
+
+
+
+**根目录下 添加 `.clangd` 配置文件**
+
+会强制 `clangd` 以 C++23 模式解析你所有的 `.cpp` 文件
+
+![image-20250716170241291](pic/image-20250716170241291.png)
+
+~~~
+CompileFlags:
+  Add: [-std=c++23]
+~~~
+
