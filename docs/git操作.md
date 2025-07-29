@@ -293,3 +293,74 @@ clone远程仓库
 
 `git tag`
 
+
+
+
+
+## 回到之前的版本
+
+**查看提交历史**
+
+~~~shell
+git log --oneline  # 内容太多 按q退出
+# 需要详细信息用
+git log
+~~~
+
+~~~shell
+# 输出示例
+# 提交 id           提交信息
+a1b2c3d 第三次提交 - 修复bug
+9f8e7d6 第二次提交 - 增加模块
+1234567 第一次提交 - 初始化项目
+~~~
+
+**临时查看之前的版本** 
+
+~~~SHELL
+git checkout <commit-id>
+~~~
+
+再回来
+
+~~~SHELL
+git checkout main # 原来的分支名
+~~~
+
+**永久退回，让当前分支回退到历史版本**
+
+~~~shell
+git reset --soft <commit-id> # 软退回，保留文件改动（文件和暂存区内容仍保留）
+git reset --hard <commit-id> # 硬退回，彻底退回，丢弃改动，慎用！！！
+~~~
+
+**查看所有提交的文件差异**
+
+~~~shell
+git show <commit-id>
+~~~
+
+
+
+结合使用
+
+~~~shell
+# 先查看提交历史
+git log --oneline
+
+# 临时切换查看
+git checkout <commit-id>
+
+# 确定退回 reset
+git reset --soft <commit-id>
+~~~
+
+
+
+**如果经常需要回到某个版本查看，建议使用 `git tag`：**
+
+~~~shell
+git tag v1.0 1234567   # 给某个提交打标签
+git checkout v1.0      # 以后可直接切换到该版本 v1.0
+~~~
+
