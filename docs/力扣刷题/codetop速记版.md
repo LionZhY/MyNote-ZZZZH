@@ -214,3 +214,142 @@ public:
 
 
 
+# 206 [反转链表](https://leetcode.cn/problems/reverse-linked-list/description/?envType=study-plan-v2&envId=top-100-liked)
+
+![image-20250701104653159](pic/image-20250701104653159.png)
+
+## 1、双指针
+
+<img src="pic/image-20250701104705438.png" alt="image-20250701104705438" style="zoom:50%;" />
+
+~~~C++
+class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        
+        // 双指针
+
+        ListNode* tmp;
+        ListNode* cur = head;
+        ListNode* pre = nullptr;
+
+        while (cur)
+        {
+            tmp = cur->next;
+            cur->next = pre; // 断开cur和cur->next，反转
+
+            // 后移pre和cur
+            pre = cur;
+            cur = tmp;
+        }
+
+        return pre;// 新的头节点
+        
+    }
+};
+~~~
+
+
+
+## 2、递归
+
+![image-20250701111833504](pic/image-20250701111833504.png)
+
+![image-20250701112439377](pic/image-20250701112439377.png)
+
+~~~C++
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    // 递归 构建reverse函数
+    ListNode* reverse(ListNode* pre, ListNode* cur)
+    {
+        if (cur == nullptr) return pre; // 直到cur = nullptr，返回pre就是新的头节点
+
+        ListNode* tmp = cur->next;
+        cur->next = pre; // 反转
+
+        return reverse(cur, tmp); // 相当于 pre = cur, cur = tmp
+    }
+
+
+    ListNode* reverseList(ListNode* head) {
+        return reverse(nullptr, head); // 初始 cur = head, pre = nullpt  
+    }
+};
+~~~
+
+
+
+
+
+
+
+
+
+# 215 [数组中的第 K 个最大元素](https://leetcode.cn/problems/kth-largest-element-in-an-array/submissions/649625107/?envType=study-plan-v2&envId=top-100-liked)
+
+@ 快排
+
+![image-20250804110511580](pic/image-20250804110511580.png)
+
+![image-20250804110517010](pic/image-20250804110517010.png)
+
+![image-20250804110524721](pic/image-20250804110524721.png)
+
+
+
+~~~C++
+class Solution {
+public:
+    // 基于快排的快速选择
+    int quickSelect(vector<int>& nums, int k)
+    {        
+        // 随机选择基准数字
+        int p = nums[rand() % nums.size()];
+
+        // 将大于等于小于基准的元素，分别放入三个数组
+        vector<int> big, equal, small;
+        for (int a : nums)
+        {
+            if (a < p)      small.push_back(a);
+            else if (a > p) big.push_back(a);
+            else            equal.push_back(a);
+        }
+
+        // 第 k 大元素在big 中，按递归划分
+        if (k <= big.size())    
+        {
+            return quickSelect(big, k);
+        }
+
+        // 第 k 大元素在 small 中，递归划分
+        if (k > big.size() + equal.size())
+        {
+            return quickSelect(small, k - (big.size() + equal.size()));
+            // 在small里面就是第 [k - (big.size() + equal.size())] 个大的元素
+        }
+
+        // 第 k 大元素在 equal 中，找到，返回p
+        return p;
+    }
+
+
+    int findKthLargest(vector<int>& nums, int k) {
+
+        return quickSelect(nums, k);        
+    }
+};
+~~~
+
+
+
