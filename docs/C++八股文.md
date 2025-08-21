@@ -1,10 +1,12 @@
 
 
-# 基础
+# 基础✅
 
 ## const
 
 > 被const修饰的值不能改变，只读，必须在定义的时候就给它赋初值
+
+### const 修饰
 
 * **修饰变量**，说明变量不能被改变
 
@@ -12,19 +14,15 @@
   
   > 这两个名称网上说的会不一致，记内容就好，不要纠结名称
   
-  * **指针常量：**指向常量，指向的值不能变（底层）
-    
-    > const 在*之前
+  * **const 在星号左侧 —— 被指物是常量**（指针常量）：指向的值不能变（底层）
     
     ~~~c++
     int a = 10;
     const int * p1 = &a; // 指向的值不能改，即a=10不能变         // 强调对象不能变
-    int const *p1 = &a;// 也可以这么写
+    int const * p1 = &a; // 也可以这么写
     ~~~
     
-  * **常量指针：**指针本身是常量，指向不能改（顶层）
-    
-    > const 在*之后
+  * **const 在星号右侧 —— 指针自身是常量**（常量指针）：指针指向不能改（顶层）
     
     ~~~c++
     int a = 10;
@@ -38,11 +36,11 @@
   
 * **修饰成员函数（常函数）**
   * 常函数，不可修改对象的成员属性
-  * 成员属性声明时加mutable后，常函数中依然可以修改
+  * 成员属性声明时加 `mutable` 后，常函数中依然可以修改
   
 * **修饰对象（常对象）**
-  * 常对象，对象前加const
-  * 对象的成员变量不会被修改
+  
+  * 常对象，对象前加const，对象的成员变量不会被修改
   * 属性值加mutable，在常对象中可修改
   * 常对象只能调用常函数
   
@@ -52,7 +50,32 @@
 * **函数参数为指向常量的指针**
   * 表示函数不会通过指针修改传入的数据
 
-------
+
+
+### 成员函数前后的const
+
+示例：
+
+~~~C++
+class Person {
+private:
+    std::string name;
+public:
+    const std::string& getName() const { return name; }  // 返回 const 引用
+};
+~~~
+
+第一个`const`：
+
+- 表示**返回的是一个 常量值**，不能被修改；
+- 仅适用于返回值为引用或指针时才有效果，否则没意义（值拷贝本身不可改）。
+
+第二个`const`
+
+- `const`修饰成员函数，**不会修改类中的任何成员变量**（除非这些成员变量被声明为 `mutable`）。
+- 只能调用其他 `const` 成员函数。可以被 `const` 类型的对象调用。
+
+
 
 
 
@@ -66,31 +89,25 @@
 
 ### static修饰变量函数
 
-* **修饰普通变量**：**静态变量**
+* **修饰普通变量**：
   * 在函数内部修饰的变量 `static int count = 0`
-  * 在程序整个生命周期内存在，不会因为离开作用域而被销毁
+  * 在**程序整个生命周期内**存在，不会因为离开作用域而被销毁
   * 默认初始化为0
-
 * **修饰普通函数**
-  * **仅在定义该函数的文件内才能使用**
+  * 仅在**定义该函数的文件内**才能使用
   * 在多人开发项目时，为了防止与他人命名空间里的函数重名，可以将函数定位为 static
-
 * **修饰成员变量**：**静态成员变量**
-  * 类中，使用static修饰的成员变量
-  * 所有类的对象，**共享**同一个静态成员变量的副本，该变量为所有对象所有
+  * 所有类的对象，**共享**同一个静态成员变量的副本，该变量**为所有对象所有**
   * **类内声明，必须在类外部单独定义**，以便为其分配存储空间，static修饰的变量先于对象存在
   * 可以被非static成员函数任意访问
   * 函数体内static变量的作用范围为该函数体，该变量内存只被分配一次，因此其值在下次调用时仍维持上次的值
   * 模块内static全局变量，可以被模块内所有函数访问，不能被模块外其他函数访问
-
-* **修饰成员函数**：**静态函数**
-  * 类内部使用static修饰的成员函数
+* **修饰成员函数**：**静态成员函数**
   * **属于类**，而不属于类的对象，**可以通过类名直接调用**，无需创建对象
   * 所以静态成员函数**没有this指针**（this指针是指向本对象的指针），只能访问static类成员
-  * 不能被virtual修饰（不能作为虚函数，因为没有this指针）
+    * ➡️不能被virtual修饰（不能作为虚函数，因为没有this指针）
   * 不能被声明为const、虚函数、volatil
-  * 不能直接访问非静态成员变量和非静态成员函数
-  * 可以被非静态成员函数任意访问
+  * 不能直接访问非静态成员变量和非静态成员函数； 但可以被非静态成员函数任意访问
   * 模块内static函数，只能被这一模块的其他函数调用，使用范围只在声明它的模块内
 
 
@@ -109,7 +126,7 @@
 
 - 不会有问题
 - 在头文件中定义static，然后这个头文件被不同的文件引用。
-- static的作用域是定义它的源文件中，这样的方式，会**在每个引用它的文件中都生成一个本地的static 变量**。
+- **static的作用域是定义它的源文件中**，这样的方式，会**在每个引用它的文件中都生成一个本地的static 变量**。
 - static的全局变量说明这个变量只在本模块有意义，不会影响其他模块
 - static 变量是静态变量，和全局变量一样，都存放在静态存储区，编译器在编译的时候，对他们的命名是不同的。因此，存放的位置也不同
 - 这时，在头文件中定义的static变量，在不同的文件中引用，就是不同的静态变量。
@@ -129,6 +146,7 @@ int funName(int first, int second,...);
 // 定义
 inline int funName(int first, int second,...) {/****/};
 
+
 // 类内定义，隐式内联
 class A {
     int doA() { return 0; }         // 隐式内联
@@ -139,13 +157,11 @@ class A {
     int doA();
 }
 inline int A::doA() { return 0; }   // 需要显式内联
-
-
 ~~~
 
 **特征**
 
-- inline建议编译器调用函数编译时，把内联函数的代码副本直接**放在每个调用该函数的地方。**
+- inline**建议**编译器调用函数编译时，把内联函数的代码副本直接**放在每个调用该函数的地方。**
 - 不用执行进入函数的步骤**，**直接执行函数体。
 - 通常与类一起使用，**类内定义的成员函数都是内联函数**（不需要显式使用inline关键字，类外定义需要）
 - 内联函数声明必须在调用语句之前
@@ -170,9 +186,23 @@ inline int A::doA() { return 0; }   // 需要显式内联
 - 需要更多内存，10个地方调用同一个内联函数，就需要10个副本，过渡使用会导致代码膨胀，增加可执行文件的大小，降低缓存效率
 - 编译时间增加，在头文件中定义inline函数，每次包含头文件时，都会重新编译函数体
 - 调试困难，函数体被插入到调用处，不方便调试时查看函数的具体执行
-- 链接，如果一个inline函数在多个编译单元中都被使用，会引发多重定义的问题，
+- 链接，如果一个inline函数在多个编译单元中都被使用，会引发多重定义的问题
 
-------
+
+
+## 类内定义函数自动当做inline
+
+类内定义的成员函数，被自动当做inline函数（建议，不是强制）
+
+为什么适合放在 `.h` 文件中？
+
+- 函数很短（1 行）；没有逻辑复杂度；
+
+- 频繁调用（如 `tid()`、`name()`、`started()`）；
+
+- 放在头文件中也不会增加太多编译开销；
+
+- 有利于性能优化（inline 展开）
 
 
 
@@ -247,13 +277,28 @@ do {
 
 
 
+### do{}while(0) 封装宏
+
+常见的宏封装技巧，保证宏的代码块在调用时，不会因为分号或换行导致语法错误
+
+~~~c++
+#define LOG_INFO(logmsgFormat, ...) \
+    do \
+    { \
+        Logger &logger = Logger::instance(); /*获取单例Logger实例*/ \
+        logger.setLogLevel(INFO); /*设置当前日志级别*/ \
+        char buf[1024] = {0}; \
+        snprintf(buf, 1024, logmsgFormat, ##__VA_ARGS__); \
+        logger.log(buf);  /*将格式化后的日志内容写入日志系统*/ \
+    } while(0) 
+// do {}while(0) 是常见的宏封装技巧，保证宏的代码块在调用时，不会因为分号或换行导致语法错误
+~~~
 
 
 
 
 
-
-## define和typedef的区别
+### define和typedef的区别
 
 **define：**
 
@@ -283,7 +328,7 @@ uint a = 10;  // 等价于 unsigned int a = 10;
 
 
 
-## const和define的区别
+### const和define的区别
 
 const用于定义常量，define用于定义宏，而宏也可以用于定义常量
 
@@ -297,7 +342,7 @@ const用于定义常量，define用于定义宏，而宏也可以用于定义常
 
 
 
-## define宏函数和普通函数
+### define宏函数和普通函数
 
 **编译过程上不同**
 
@@ -313,7 +358,7 @@ const用于定义常量，define用于定义宏，而宏也可以用于定义常
 
 
 
-## define宏函数和inline内联函数
+### define宏函数和inline内联函数
 
 **相同点**
 
@@ -334,25 +379,15 @@ const用于定义常量，define用于定义宏，而宏也可以用于定义常
 
 **宏不可调试**，内联机制既具备宏代码的效率，又增加了安全性，而且可以自由操作的类的数据成员，所以**应该尽量使用内联函数来取代宏代码。**
 
-------
+
 
 
 
 ## assert 
 
-断言，是宏，而非函数
+> 断言，是宏，而非函数
 
 assert 宏的原型定义在 `<assert.h>`（C）、`<cassert>`（C++）中，其作用是**如果它的条件返回错误，则终止程序执行**。
-
-可以通过定义 `NDEBUG` 来关闭 assert，但是需要在源代码的开头，`include <assert.h>` 之前。
-
-~~~c++
-#define NDEBUG          // 加上这行，则 assert 不可用
-#include <assert.h>
-
-assert( p != NULL );    // assert 不可用
-
-~~~
 
 ~~~c++
 #include <stdio.h>
@@ -366,16 +401,23 @@ int main()
   x = 9;
 
   // 程序员假设x在其余代码中为7
-  assert(x == 7); // assert_use: assert_use.cpp:13: int main(): Assertion `x == 7' failed. Aborted
+  assert(x == 7); // `x == 7' failed
 
   /* 其余代码 */
   return 0;
 }
-
-
 ~~~
 
-------
+可以通过定义 `NDEBUG` 来关闭 assert，但是需要在源代码的开头，`include <assert.h>` 之前。
+
+~~~c++
+#define NDEBUG          // 加上这行，则 assert 不可用
+#include <assert.h>
+
+assert( p != NULL );    // assert 不可用
+~~~
+
+
 
 
 
@@ -397,7 +439,7 @@ for(volatile int i=0; i<100000; i++); // 空循环，会执行，不会被优化
 
 
 
-## 枚举 enum
+## enum枚举 
 
 **枚举类型**(enumeration)是 C++ 中的一种派生数据类型，它是由用户定义的若干枚举常量的集合。
 
@@ -492,6 +534,181 @@ cout << color3; // 输出的是color3的整数值，即RED的整数值 1
 
 
 
+## explicit
+
+**禁止隐式转换**
+
+explicit（显式的）的作用是"禁止单参数构造函数"被用于自动型别转换，其中比较典型的例子就是容器类型。
+
+在这种类型的构造函数中你可以将初始长度作为参数传递给构造函数。
+
+就是**不允许用 `=` 的方式来初始化对象**（防止“偷偷地”类型转换）。
+
+**没有explicit，编译器会帮你转类型；有了explicit，就必须自己转**
+
+~~~c++
+class A {
+public:
+    A(int x) { std::cout << x << std::endl; } // 没加expicit
+};
+
+void func(A a) {} // 需要一个A类型的参数
+
+int main() {
+    func(10);  // ✅ 合法，10 会被自动转换为 A(10)，编译器自动转的，把int的10转为A(10)
+}
+
+
+class A {
+public:
+    explicit A(int x) { std::cout << x << std::endl; } // 加了expicit
+};
+
+void func(A a) {} // 需要一个A类型的参数
+
+int main() {
+    // func(10);  // // ❌ 错误：explicit 禁止了 int -> A 的隐式转换
+
+    func(A(10));  // ✅ 正确：显式创建对象
+}
+
+~~~
+
+
+
+
+
+
+
+## namespace
+
+> namespace命名空间，是C++用来**防止名字冲突**的机制。
+
+namespace 作为附加信息来**区分不同库中相同名称的函数、类、变量等**。使用了命名空间即定义了上下文。
+
+本质上，命名空间就是**定义了一个范围**。（相当于不同文件夹里，可以有同名的文件，用的时候要指明是哪个文件夹里的文件）
+
+**定义命名空间**
+
+~~~c++
+namespace namespace_name {
+   // 代码声明
+}
+~~~
+
+**调用带有命名空间的函数或变量，需要在前面加上命名空间的名称**
+
+~~~c++
+name::code;  // code 可以是变量或函数
+~~~
+
+示例
+
+~~~c++
+#include <iostream>
+using namespace std;
+ 
+// 第一个命名空间
+namespace first_space{
+   void func(){
+      cout << "Inside first_space" << endl;
+   }
+}
+// 第二个命名空间
+namespace second_space{
+   void func(){
+      cout << "Inside second_space" << endl;
+   }
+}
+int main ()
+{
+   // 调用第一个命名空间中的函数，输出Inside first_space
+   first_space::func(); 
+   // 调用第二个命名空间中的函数，输出Inside second_space
+   second_space::func(); 
+ 
+   return 0;
+}
+~~~
+
+**using namespace指令**
+
+> 可以使用 using namespace 指令，这样在使用命名空间时就可以不用在前面加上命名空间的名称。
+>
+> 这个指令会告诉编译器，后续的代码将使用指定的命名空间中的名称。
+>
+
+~~~c++
+#include <iostream>
+using namespace std;
+ 
+// 第一个命名空间
+namespace first_space{
+   void func(){
+      cout << "Inside first_space" << endl;
+   }
+}
+// 第二个命名空间
+namespace second_space{
+   void func(){
+      cout << "Inside second_space" << endl;
+   }
+}
+using namespace first_space; // 后面的func()使用第一个命名空间里的
+int main ()
+{
+   // 调用第一个命名空间中的函数
+   func();
+
+   return 0;
+}
+~~~
+
+
+
+
+
+## extern
+
+外部声明，表示定义在别处。这里只是声明，不分配内存。
+
+extern（外部的）声明变量或函数为**外部链接**，即该变量或函数名在其它文件中可见。
+
+被其修饰的变量（外部变量）是**静态分配空间**的，即**程序开始时分配，结束时释放**。
+
+用其声明的变量或函数应该**在别的文件或同一文件的其它地方定义（实现）**。在文件内声明一个变量或函数默认为可被外部使用。
+
+在 C++ 中，还可用来指定使用另一语言进行链接，这时需要与特定的转换符一起使用。目前仅支持 **C** 转换标记，来支持 C 编译器链接。使用这种情况有两种形式：
+
+~~~c++
+extern "C" 声明语句
+
+extern "C" { 声明语句块 }
+
+~~~
+
+
+
+### 在C++中调用C函数怎么做？在C中调用C++又应该怎么做？⭐
+
+C 中调用 C++
+
+- 先在C++代码函数前，加上extern “C”
+
+- 然后C代码中不要include C++的头文件, 而采用直接在C中增加函数声明的方式;
+
+C++调用C 
+
+- 在include的时候, 要采用extern “C” 代码块形式
+
+- 对调用的C代码进行extern “C”
+
+
+
+
+
+
+
 ## 数据类型
 
 **整型数据长度**
@@ -523,7 +740,11 @@ cout << color3; // 输出的是color3的整数值，即RED的整数值 1
 
 int被设置为自然长度，即计算机处理起来效率最高的长度，所以选择类型时一般选用int
 
-------
+
+
+
+
+
 
 
 
@@ -552,19 +773,15 @@ p = &a; // p指向a，p存放的就是a的地址, &a表示a的地址
 
 > 这两个名称网上说的会不一致，记内容就好
 
-* **指针常量：**指向常量，指向的值不能变（底层）
-
-  > const 在*之前
+* **const 在星号左侧 —— 被指物是常量**（指针常量）：指向的值不能变（底层）
 
   ~~~c++
   int a = 10;
   const int * p1 = &a; // 指向的值不能改，即a=10不能变         // 强调对象不能变
   int const *p1 = &a;// 也可以这么写
   ~~~
-
-* **常量指针：**指针本身是常量，指向不能改（顶层）
-
-  > const 在*之后
+  
+* **const 在星号右侧 —— 指针自身是常量**（常量指针）：指针指向不能改（顶层）
 
   ~~~c++
   int a = 10;
@@ -582,11 +799,9 @@ int a = 10;
 int &ref = a;// ref是一个初始化为a的整型引用，且只能一直是a的别名，ref=10
 ~~~
 
-- 引用是某个已存在变量的别名，可以用这个别名来指向原来的变量
-- 一旦初始化就不可以发生改变，本质上是一个指针常量（指向不能改变）
+- 引用是某个已存在变量的别名，可以用这个别名来指向原来的变量；别名可以和原名一样
+- **引用必须初始化**，一旦初始化就**不可以发生改变**，本质上是一个指针常量（指向不能改变）
 - 常量引用：函数形参列表中，加const修饰形参，防止形参改变实参
-- 引用必须初始化，之后不能改变
-- 别名可以和原名一样
 
 
 
@@ -896,29 +1111,11 @@ int main ()
 
 
 
-### 在C++中调用C函数怎么做？在C中调用C++又应该怎么做？⭐
-
-C 中调用 C++
-
-- 先在C++代码函数前，加上extern “C”
-
-- 然后C代码中不要include C++的头文件, 而采用直接在C中增加函数声明的方式;
-
-C++调用C 
-
-- 在include的时候, 要采用extern “C” 代码块形式
-
-- 对调用的C代码进行extern “C”
 
 
+# 内存✅
 
 
-
-
-
-# 内存
-
-------
 
 ## C++如何管理内存
 
@@ -1025,9 +1222,9 @@ C++调用C
 
 
 
-# 面向对象
+# 面向对象✅
 
-------
+
 
 ## 三大特性
 
@@ -1081,8 +1278,6 @@ C++调用C
 - 在类的非静态成员函数中，返回对象本身，可以用`return *this`
 
 
-
-### class和struct的区别
 
 
 
@@ -1274,13 +1469,13 @@ C++调用C
 
 
 
-# STL
+# STL✅
 
 
 
 
 
-# 编译
+# 编译✅
 
 ## C++编译过程
 
@@ -1302,7 +1497,7 @@ C++调用C
 
 
 
-# C++11
+# C++11✅
 
 ## C++11新特性
 
@@ -1399,38 +1594,56 @@ decltype 用于获取一个表达式的类型，而不对表达式进行求值�
 
 
 
-### std::move()
+### std::move
 
-C++11 引入的一个**标准库函数模板**，用于**将左值强制转换为右值引用**，以支持**移动语义（move semantics）**。
+> `std::move` 是一个“右值引用转换器”，告诉编译器：“我不再需要这个对象的内容了，可以直接转移资源”。这叫“移动语义”。
 
-~~~C++
-template<typename T>
-typename std::remove_reference<T>::type&& move(T&& arg);
+**左值和右值**
+
+| 名称 | 含义                           | 举例                               |
+| ---- | ------------------------------ | ---------------------------------- |
+| 左值 | 有名字、可以取地址的变量       | `int a = 10;` → `a` 是左值         |
+| 右值 | 临时的值，没有名字，不能取地址 | `a + 1`、`10`、`std::string("hi")` |
+
+~~~c++
+int x = 5;
+int y = x + 2;   // x 是左值；x+2 是右值
 ~~~
 
-**告诉编译器：我不再需要这个对象的资源，可以把它“搬”走（即转移其内部资源的所有权）**。
+**移动语义**
 
-本身不做任何实际的“移动”操作，只是一个**类型转换**工具。
+C++11引入的新机制，在可以避免拷贝的场景下，直接“搬走”资源，提高效率。
 
-`std::move(obj)` 把 `obj` 从**左值**转换为一个**右值引用**类型（`T&&`）。
+~~~c++
+// 不使用移动语义
+std::string s1 = "hello";
+std::string s2 = s1;  // 拷贝构造 → 复制内容，开销大
 
-只有当某个对象类型提供了移动构造函数，或移动赋值运算符时，`std::move`才能有实际好处。
 
-~~~C++
-#include <iostream>
-#include <string>
-#include <utility>
+// 使用移动语义
+std::string s1 = "hello";
+std::string s2 = std::move(s1); // 移动构造 → 把 s1 的内容“挪给” s2
 
-int main() {
-    std::string a = "hello";
-    // a --> b
-    std::string b = std::move(a);  // 触发 std::string 的移动构造函数
-    std::cout << "a = " << a << std::endl;  // 通常为空或处于已被“移走”的状态
-    std::cout << "b = " << b << std::endl;
-}
 ~~~
 
-适合的典型场景包括：
+s1的内容直接搬给s2，之后 **s1 的内容被清空，s2 拿到原来的内容**。
+
+移动时发生的事情：
+
+- 把s1的资源指针交给s2，s2现在拥有这块内存，s1把自己的指针设为nullptr
+
+`std::move()`**把 obj 转换成一个右值引用**，告诉编译器：“这个对象可以被搬走，你别拷贝了”。
+
+~~~c++
+std::move(obj) 
+~~~
+
+~~~c++
+std::vector<int> v1 = {1, 2, 3};
+std::vector<int> v2 = std::move(v1);  // 移动构造
+~~~
+
+**适合的典型场景：**
 
 - 容器插入元素（如 `std::vector::emplace_back(std::move(obj))`）；
 - 返回局部对象时优化性能；
@@ -1730,6 +1943,16 @@ std::shared_ptr<T> weak_ptr<T>::lock() const noexcept;
 
 
 
+#### get()
+
+ `get()` 是 `std::unique_ptr` 智能指针的成员函数：
+
+~~~C++
+Acceptor* get() const noexcept;
+~~~
+
+`get()` 返回 `unique_ptr` 所管理的**原始裸指针**（raw pointer），**但不释放所有权**。也就是说，它不会影响智能指针的生命周期控制。
+
 
 
 
@@ -1852,3 +2075,455 @@ int main()
 
 
 
+
+
+## = delete 显示删除
+
+C++11引入的 **显式删除函数（Deleted Function）** 语法，主要用于**禁用默认的函数**（如构造函数、拷贝构造、赋值运算符等）
+
+```c++
+noncopyable(const noncopyable &) = delete;// 显式删除了拷贝构造函数
+
+noncopyable &operator=(const noncopyable &) = delete;// 显式删除了拷贝赋值运算符的语法
+
+// 重载运算符=
+// ClassName& operator=(const ClassName& other) {
+//     if (this != &other) {  
+//         // 赋值逻辑
+//     }
+//     return *this;
+// }
+
+```
+
+
+
+
+
+## using
+
+是 C++11 引入的 **类型别名** 语法，等价于 `typedef`，但更**清晰、易读**。
+
+```c++
+using 别名 = 目标类型;
+```
+
+channel.h
+
+```c++
+// channel.h
+using EventCallback = std::function<void()>;
+using ReadEventCallback = std::function<void(Timestamp)>;
+
+// 等价的 `typedef` 形式：
+typedef std::function<void()> EventCallback;
+typedef std::function<void(Timestamp)> ReadEventCallback;
+```
+
+
+
+
+
+## function
+
+`std::function` 是 C++11 引入的**通用函数封装器**，可以存储、调用和复制任何可调用对象**（普通函数、Lambda、成员函数、仿函数）**。
+
+在头文件`<functional>`中。
+
+`std::function` 主要用于**回调函数、事件处理、线程任务等场景**。
+
+**基本用法**
+
+```c++
+#include <functional>
+
+// 语法
+std::function<返回类型(参数类型1, 参数类型2, ...)> 变量名;
+
+// 示例
+std::function<void()> func; // 存储无参数、无返回值的可调用对象
+std::function<int(int, int)> add; // 存储两个 int 参数、返回 int 的可调用对象
+```
+
+**示例**
+
+~~~c++
+#include <iostream>
+#include <functional>
+
+void greet() {
+    std::cout << "Hello, World!" << std::endl;
+}
+
+int main() {
+    // f 是一个 std::function<void()> 类型的变量，表示一个“无参、无返回值”的函数对象
+    std::function<void()> f = greet; // 将greet函数赋给f
+    f(); // 输出: Hello, World!
+
+    // lambda表达式作为回调
+    std::function<void()> lambda = []() { 
+        std::cout << "Hello, Lambda!" << std::endl;
+    };
+    lambda(); // 输出: Hello, Lambda!
+
+    return 0;
+}
+~~~
+
+**回调函数**
+
+回调函数（Callback Function）是通过参数传递到另一个函数中，并在适当时机被“回调”执行的函数。
+
+一个函数作为参数，传给另一个函数，并在后者中被调用。
+
+
+
+
+
+# 多线程
+
+
+
+## std::thread
+
+C++ 11 之后添加了新的标准线程库 **std::thread**，std::thread 在 `<thread>` 头文件中声明。
+
+`<thread>` 库是 C++ 标准库的一部分，提供了**创建和管理线程**的基本功能，它包括以下几个关键组件：
+
+- `std::thread`：表示一个线程，可以创建、启动、等待和销毁线程。
+- `std::this_thread`：提供了一些静态成员函数，用于操作当前线程。
+- `std::thread::id`：线程的唯一标识符。
+
+`std::thread` 表示一个可执行的线程。核心作用是：**创建并管理一个新线程**，让这个线程**执行你提供的函数**或 lambda 表达式。
+
+**创建线程**
+
+要创建一个线程，你需要实例化 `std::thread` 类，并传递一个可调用对象（函数、lambda 表达式或对象的成员函数）作为参数。
+
+创建 `std::thread` 对象后，线程会立即开始执行。
+
+~~~c++
+#include<thread>
+std::thread thread_object(callable, args...);
+// callable：可调用对象，可以是函数指针、函数对象、Lambda 表达式等。
+// args...：传递给 callable 的参数列表。
+~~~
+
+**示例**
+
+~~~c++
+#include <iostream>
+#include <thread>
+
+void printMessage(int count) {
+    for (int i = 0; i < count; ++i) {
+        std::cout << "Hello from thread (function pointer)!\n";
+    }
+}
+
+int main() {
+    // 创建一个 std::thread 类型的对象 t，它启动一个新线程去执行 func。
+    std::thread t1(printMessage, 5); 
+    
+    t1.join(); // 等待线程完成
+    return 0;
+}
+
+
+// 输出
+Hello from thread (function pointer)!
+Hello from thread (function pointer)!
+Hello from thread (function pointer)!
+Hello from thread (function pointer)!
+Hello from thread (function pointer)!
+~~~
+
+必须调用 `join()` 或 `detach()` 处理线程，如果直接销毁线程对象，会导致程序崩溃。
+
+```c++
+std::thread t(task);  // 启动线程但没 join 或 detach
+```
+
+C++ 会报错：
+
+> ```C++
+> terminate called without an active exception
+> ```
+
+因为线程资源没有被正确处理，违反了 C++ 的线程语义。
+
+
+
+**join()**
+
+`join()` 用于**等待线程完成执行**。阻塞当前线程，直到被调用的线程完成执行。
+
+```
+t.join();
+```
+
+**detach()**
+
+`detach()` 将**线程与主线程分离**，线程在后台独立运行，主线程不再等待它。
+
+当线程执行完毕后，你可以使用 `detach()` 方法来分离线程，或者让 `std::thread` 对象超出作用域自动销毁。
+
+```
+t.detach();
+```
+
+
+
+
+
+## detach() 和 join()
+
+| 操作       | 作用说明                           | 资源管理方式                   |
+| ---------- | ---------------------------------- | ------------------------------ |
+| `join()`   | 主线程**等待**子线程执行完成       | 线程资源由主线程清理           |
+| `detach()` | 主线程**不等待**子线程，放它自由跑 | 子线程自己清理资源（后台线程） |
+
+**主线程**（Main Thread）是 C++ 程序中最先执行的那条线程，也就是**从 `main()` 函数开始运行**的那条线程。
+
+**子线程**是程序运行过程中**由主线程或其他线程手动创建的线程**。
+
+**示例**
+
+~~~c++
+#include <iostream>
+#include <thread>
+#include <chrono>
+
+void task() {
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::cout << "子线程完成任务\n";
+}
+
+~~~
+
+**使用`join()`**
+
+~~~c++
+int main() {
+    std::thread t(task);
+    
+    t.join();  // 等待子线程跑完
+    std::cout << "主线程继续执行\n";
+}
+// 主线程 等子线程执行完毕后 才继续执行
+
+// 输出
+（等待 2 秒）
+子线程完成任务
+主线程继续执行
+~~~
+
+**使用`detach()`**
+
+~~~c++
+int main() {
+    std::thread t(task);
+    t.detach();  // 不等，直接分离
+    std::cout << "主线程继续执行\n";
+}
+
+// 主线程 不等子线程，子线程后台自己跑
+
+// 输出
+主线程继续执行
+（稍后）子线程完成任务
+
+~~~
+
+主线程和子线程在 **不同的 CPU 核心或时间片上并发运行**，互不阻塞。即使主线程先退出，**子线程还是照常完成任务**，因为它已经“脱离”主线程的生命周期了。
+
+
+
+
+
+## atomic
+
+### atomic原子类型
+
+在多线程程序中，**如果多个线程同时访问并修改同一个普通变量**，就会发生**竞态条件（race condition）**，导致程序行为不确定。
+
+为解决这个问题，传统方法是使用 `mutex` 加锁，而 `std::atomic` 提供了一个**更高效的替代方案**，**不需要锁就能安全操作变量**。
+
+C++11 标准引入了 `<atomic>` 库，它提供了一组**原子操作**，用于保证**在多线程环境下，对共享数据的访问是原子的，即不可分割的**。这可以避免数据竞争和保证线程安全。
+
+> **原子操作**是指在执行过程中**不会被其他线程中断**的操作。在多线程环境下，原子操作要么完全执行，要么完全不执行，不会出现中间状态。
+
+`std::atomic` **能保证多个线程在同时访问变量时**，**不会互相打扰**，每次操作都是“**一步到位**”的，不会被中途打断。
+
+**常见的原子类型**
+
+| 类型                  | 说明             |
+| --------------------- | ---------------- |
+| `std::atomic<int>`    | 原子化的整数     |
+| `std::atomic<bool>`   | 原子化的布尔值   |
+| `std::atomic<size_t>` | 原子化的计数类型 |
+| `std::atomic<T*>`     | 原子化的指针类型 |
+
+**示例：在多线程环境中安全的更新一个共享计数器**
+
+~~~c++
+#include <iostream>
+#include <atomic>
+#include <thread>
+
+std::atomic<int> counter(0); // 初始化原子计数器
+
+void increment() {
+    for (int i = 0; i < 10000; ++i) {
+        counter++;
+    }
+}
+
+int main() {
+    std::thread t1(increment);
+    std::thread t2(increment);
+    t1.join();
+    t2.join();
+
+    std::cout << "Counter = " << counter << std::endl;  // 理论输出 20000
+}
+~~~
+
+如果不用 `atomic`，可能输出不是 20000，因为两个线程竞争修改 `counter`。使用 `std::atomic<int>` 可确保每次修改是安全的。
+
+**Thread.h中**
+
+~~~c++
+static std::atomic_int numCreated_; // 记录全局创建的线程数，每创建一个Thread，计数+1
+~~~
+
+在 C++ 标准库中， `std::atomic_int` 是通过 `typedef`（或 `using`）定义的 **类型别名**，它等价于：
+
+~~~c++
+typedef std::atomic<int> atomic_int;
+// 或者 
+using atomic_int = std::atomic<int>;
+~~~
+
+
+
+C++ 标准库中为了方便，也定义了多个**原子类型的别名**，例如：
+
+| 别名                | 等价于                      |
+| ------------------- | --------------------------- |
+| `std::atomic_bool`  | `std::atomic<bool>`         |
+| `std::atomic_int`   | `std::atomic<int>`          |
+| `std::atomic_long`  | `std::atomic<long>`         |
+| `std::atomic_llong` | `std::atomic<long long>`    |
+| `std::atomic_uint`  | `std::atomic<unsigned int>` |
+
+
+
+### fetch_add(1)方法
+
+`fetch_add(1)` 是 C++ 原子类型（如 `std::atomic<int>`) 提供的原子操作方法。
+
+表示**以原子方式将当前值加上指定值，并返回加之前的旧值**。
+
+在`TcpServer::start()`中：
+
+~~~C++
+if (started_.fetch_add(1) == 0)
+~~~
+
+这里 `started_` 是一个 `std::atomic_int`，`fetch_add(1)` 表示：
+
+- 将`started_`加1
+- 返回加之前的值
+- 所有操作都是线程安全的原子操作
+
+用于 **只允许首次执行某段初始化逻辑**：
+
+- 如果旧值是0，说明是第一次调用`start()`，应该进入if执行
+- 如果旧值不是0， 说明之前`started_`已经加1了，已经执行过一次了，不再执行
+
+
+
+
+
+## 信号量sem
+
+**什么是信号量？**
+
+是一个用来**控制协调多个线程访问共享资源**（同步和互斥）的 **“计数器” 机制**，防止出现数据竞争和资源冲突。
+
+可以理解为线程之间用来同步的一种工具，资源计数器。所以其实是 “**信号计数量**”。
+
+>  **首先是一个变量，其次是计数器。**
+
+信号量在**创建时需要设置一个初始值**，表示**同时可以有几个任务（线程）可以访问**某一块共享资源。
+
+- 一个任务要想访问共享资源，需要信号量大于0；
+- 当该任务成功获得资源后，将信号量的值减 1；
+- 当任务执行完之后，必须释放信号量，对应操作就是信号量的值加 1。
+
+- 若当前信号量的值小于 0，表明无法获得信号量，该任务必须被挂起，等待信号量恢复为正值的那一刻；
+
+另外，对信号量的操作（加、减）都是原子的。
+
+**声明信号量**
+
+`sem_t` 是 POSIX 信号量的数据类型，用于表示一个信号量对象（适用于Linux/UNIX下的多线程）
+
+包含在头文件`<semaphore.h>`中。
+
+~~~C++
+#include <semaphore.h>
+sem_t sem;// 声明一个信号量
+~~~
+
+**初始化信号量 `sem_init()`**
+
+~~~C++
+int sem_init(sem_t* sem, int pshared, unsigned int value);
+
+// sem		信号量变量（的地址）
+// pshared	是否在进程间共享，
+// 			设为 0 表示仅用于线程间共享（同一个进程内）；1 表示可以进程间共享(需要放在共享内存中)
+// value	信号量的初始值（比如资源数量、允许进入线程数）
+~~~
+
+**等待信号量（P 操作）`sem_wait()`**
+
+~~~C++
+int sem_wait(sem_t* sem);
+
+// 用于等待某个资源或条件就绪
+// 如果信号量的值 > 0，执行成功，同时信号量减 1；
+// 如果值 = 0，当前线程阻塞，等待别人释放信号量。
+~~~
+
+**释放信号量（V 操作）`sem_post()`**
+
+~~~C++
+int sem_post(sem_t* sem);
+
+// 信号量的值加 1；
+// 如果有线程在 sem_wait 阻塞，它会被唤醒
+~~~
+
+**销毁信号量`sem_destory()`**
+
+~~~C++
+int sem_destory(sem_t* sem);
+
+// 清理资源
+// 一般在线程退出、或程序结束前调用
+~~~
+
+
+
+
+
+
+
+
+
+
+
+# end
