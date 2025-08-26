@@ -286,14 +286,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
 
-
-
-
-
-
-
-
-
 ### 包含其它 cmake 文件
 
 ~~~shell
@@ -461,7 +453,7 @@ MyProject/
 
 ~~~shell
 cmake_minimum_required(VERSION 3.10)   # 指定最低 CMake 版本
-project(MyProject VERSION 1.0)          # 定义项目名称和版本
+project(MyProject VERSION 1.0)         # 定义项目名称和版本
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 11)

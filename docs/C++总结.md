@@ -119,3 +119,52 @@ priority_queue<int, vector<int>, greater<int>> minHeap; // 小顶堆
 priority_queue<pair<int, int>, vector<pair<int, int>>, mycomparison> pri_que;
 ~~~
 
+
+
+# C++20 `<ranges>` 
+
+`std::ranges` 基本覆盖了 `<algorithm>` 里常用的函数，用法更简洁、安全，并且扩展了比较器 + 投影机制。
+
+主要改进
+
+1. **调用更简洁**：直接传容器，无需写 `.begin(), .end()`
+
+   ```
+   std::vector<int> v{3,1,4};
+   auto it = std::ranges::max_element(v); // ✅ 更直观
+   ```
+
+2. **支持投影 (projection)**：直接指定比较属性
+
+   ```
+   struct Point { int x,y; };
+   std::vector<Point> ps{{1,2},{3,1},{2,5}};
+   auto p = *std::ranges::max_element(ps, {}, &Point::y); // 按 y 比较
+   ```
+
+3. **Concepts 约束**：参数类型检查更严格，编译期报错更清晰。
+
+
+
+C++20 `std::ranges` 常用函数
+
+| 类别         | 传统 `<algorithm>`                                           | C++20 `<ranges>`                                           | 用法区别与优势                                               |
+| ------------ | ------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------ |
+| **最值**     | `max(a, b)` / `min(a, b)`                                    | `ranges::max(a, b)` `ranges::min(a, b)                     | `ranges::max()` 可直接作用于整个 range ⭐<br />如 `ranges::max(vec)` |
+|              | `minmax(a, b)`                                               | `ranges::minmax(a, b)`                                     | 同上，可直接处理容器。                                       |
+| **极值元素** | `max_element(vec.begin(), vec.end())`<br />`min_element(...)` | `ranges::max_element(vec)`<br />`ranges::min_element(...)` | 不需要 `.begin(), .end()`，更简洁、更安全。⭐                 |
+| **查找**     | `find(vec.begin(), vec.end(), value)`                        | `ranges::find(vec, value)`                                 | 直接传容器，不必写迭代器。⭐                                  |
+|              | `find_if(vec.begin(), vec.end(), pred)`                      | `ranges::find_if(vec, pred)`                               | 简化写法，更清晰。                                           |
+| **计数**     | `count(vec.begin(), vec.end(), value)`                       | `ranges::count(vec, value)`                                | 免去 `.begin(), .end()`。⭐                                   |
+|              | `count_if(vec.begin(), vec.end(), pred)`                     | `ranges::count_if(vec, pred)`                              | 更简洁。                                                     |
+| **遍历**     | `for_each(vec.begin(), vec.end(), f)`                        | `ranges::for_each(vec, f)`                                 | 直接作用于容器。                                             |
+| **排序**     | `sort(vec.begin(), vec.end())`                               | `ranges::sort(vec)`                                        | API 更直观，自动推断范围⭐                                    |
+|              | `stable_sort(...)`                                           | `ranges::stable_sort(...)`                                 | 同理。                                                       |
+|              | `is_sorted(vec.begin(), vec.end())`                          | `ranges::is_sorted(vec)`                                   | 写法更简洁。                                                 |
+| **拷贝**     | `copy(src.begin(), src.end(), dest.begin())`                 | `ranges::copy(src, dest.begin())`                          | 源区间可直接传容器。                                         |
+|              | `copy_if(...)`                                               | `ranges::copy_if(src, dest.begin(), pred)`                 | 同理，避免迭代器错误。                                       |
+| **比较区间** | `equal(a.begin(), a.end(), b.begin())`                       | `ranges::equal(a, b)`                                      | 不必传 `end()`，减少错误。                                   |
+
+
+
+# end

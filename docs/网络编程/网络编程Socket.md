@@ -2,29 +2,29 @@
 
 > 参考：
 >
-> 《Linux高性能服务器编程》游双
+> 《Linux 高性能服务器编程》游双
 >
-> 重写moduo库 施磊
+> 重写 moduo 库 施磊
 >
-> [小林coding 高性能网络模式：Reactor 和 Proactor](https://xiaolincoding.com/os/8_network_system/reactor.html) 
+> [小林 coding 高性能网络模式：Reactor 和 Proactor](https://xiaolincoding.com/os/8_network_system/reactor.html)
 >
-> [小林coding socket 网络模型过度到 I/O 多路复用](https://xiaolincoding.com/os/8_network_system/selete_poll_epoll.html#%E6%9C%80%E5%9F%BA%E6%9C%AC%E7%9A%84-socket-%E6%A8%A1%E5%9E%8B)
+> [小林 coding socket 网络模型过度到 I/O 多路复用](https://xiaolincoding.com/os/8_network_system/selete_poll_epoll.html#%E6%9C%80%E5%9F%BA%E6%9C%AC%E7%9A%84-socket-%E6%A8%A1%E5%9E%8B)
 >
-> [Socket网络编程 syxdevcode博客](https://blogs.hdvr.top/2021/09/13/Socket%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/)
+> [Socket 网络编程 syxdevcode 博客](https://blogs.hdvr.top/2021/09/13/Socket%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/)
 >
-> [C#网络编程二：Socket编程](https://www.cnblogs.com/dotnet261010/p/6211900.html)
+> [C#网络编程二：Socket 编程](https://www.cnblogs.com/dotnet261010/p/6211900.html)
 >
 > [C++高性能网络编程 Jack Huang’s Blog](https://huangwang.github.io/)  
 >
 > [登龙（DLonng）Linux 高级编程 - Socket 编程基础（TCP，UDP）](https://dlonng.com/posts/tcp_udp)
 >
-> [C++socket编程  kcep云呓](https://blog.csdn.net/k16li/article/details/141070741?ops_request_misc=%257B%2522request%255Fid%2522%253A%25228428ccc2f37922cca728d06f3c56ebe8%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fall.%2522%257D&request_id=8428ccc2f37922cca728d06f3c56ebe8&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~first_rank_ecpm_v1~hot_rank-2-141070741-null-null.142^v102^control&utm_term=C%2B%2B%20Socket%E7%BC%96%E7%A8%8B&spm=1018.2226.3001.4187)
+> [C++socket 编程  kcep 云呓](https://blog.csdn.net/k16li/article/details/141070741?ops_request_misc=%257B%2522request%255Fid%2522%253A%25228428ccc2f37922cca728d06f3c56ebe8%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fall.%2522%257D&request_id=8428ccc2f37922cca728d06f3c56ebe8&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~first_rank_ecpm_v1~hot_rank-2-141070741-null-null.142^v102^control&utm_term=C%2B%2B%20Socket%E7%BC%96%E7%A8%8B&spm=1018.2226.3001.4187)
 
 
 
 ## 一些概念
 
-### **什么是网络模型？**
+### 什么是网络模型？
 
 可以简单的理解为计算机如何处理网络数据。
 
@@ -33,31 +33,33 @@
 - 同步阻塞（Blocking I/O）：请求数据–繁忙–数据返回
 - 同步非阻塞（Non-blocking I/O）：不断查询
 - 多线程（Thread-per-Connection）：每个网络连接创建一个线程
-- Reactor：有网络事件发生时，EventLoop安排合适的Channel去处理
+- Reactor：有网络事件发生时，EventLoop 安排合适的 Channel 去处理
 
-### 文件描述符fd（File Descriptor）
+
+
+### 文件描述符 fd（File Descriptor）
 
 - 操作系统分配的“号码牌”，用于标识打开的文件、网络连接等。
 
 - 示例：
 
   ~~~C++
-  int fd = open("data.txt", O_RDONLY);  // 打开文件时，操作系统会返回一个fd，假设返回 fd = 3
+  int fd = open("data.txt", O_RDONLY);  // 打开文件时，操作系统会返回一个 fd，假设返回 fd = 3
   read(fd, buffer, 100);  // 通过 fd 读取文件
-  close(fd);  			// 关闭文件，释放 fd，其他进程就可以用“3”这个fd了
+  close(fd);  			// 关闭文件，释放 fd，其他进程就可以用“3”这个 fd 了
   ~~~
 
-  - 打开文件时，操作系统会返回一个fd，可以通过这个fd来读写文件、网络连接等，关闭文件时，fd就被释放。
+  - 打开文件时，操作系统会返回一个 fd，可以通过这个 fd 来读写文件、网络连接等，关闭文件时，fd 就被释放。
 
-  - 不管是打开文件，还是建立网络连接，它们都会被操作系统当做“文件”来管理，并分配一个fd。
+  - 不管是打开文件，还是建立网络连接，它们都会被操作系统当做“文件”来管理，并分配一个 fd。
 
 
 
-### 什么是socket？
+### 什么是 socket？
 
-- 在同一设备或不同设备的进程间通信，需要创建一个socket，提供统一接口。
+- 在同一设备或不同设备的进程间通信，需要创建一个 socket，提供统一接口。
 
-- `socket`（套接字）就是一个**特殊的文件描述符**，专门用来**进行网络通信**。
+- `socket`（套接字）就是一个 **特殊的文件描述符**，专门用来 **进行网络通信**。
 
 
 
@@ -65,45 +67,43 @@
 
 **Channel**
 
-- Channel是文件描述符**fd的管理者**，负责监听socket是否有数据可读，是否可以写入等事件。
+- Channel 是文件描述符 **fd 的管理者**，负责监听 socket 是否有数据可读，是否可以写入等事件。
 
 **Poller**
 
-- Poller是事件监听器，监听多个socket是否发生了网络事件（如数据可读、可写）。
+- Poller 是事件监听器，监听多个 socket 是否发生了网络事件（如数据可读、可写）。
 
-- Poller底层使用epoll（高效的I/O复用技术）来监听事件。
+- Poller 底层使用 epoll（高效的 I/O 复用技术）来监听事件。
 
 **EventLoop**
 
-- EventLoop是事件循环，不断询问Poller是否有新事件，然后调度Channel处理这些事件。
-
-
+- EventLoop 是事件循环，不断询问 Poller 是否有新事件，然后调度 Channel 处理这些事件。
 
 
 
 ## IO：阻塞、非阻塞、同步、异步
 
-> 阻塞、非阻塞、同步、异步，描述的都是IO的一些状态。
+> 阻塞、非阻塞、同步、异步，描述的都是 IO 的一些状态。
 >
-> 典型的一次IO（包括网络IO）的两个阶段：① **数据准备**（数据是否就绪），② **数据读写**
+> 典型的一次 IO（包括网络 IO）的两个阶段：① **数据准备**（数据是否就绪），② **数据读写**
 
 
 
 ### 数据准备—— 阻塞，非阻塞
 
-根据系统IO操作的就绪状态
+根据系统 IO 操作的就绪状态
 
-> 远端有没有数据过来，内核相应的 sockfd 对应的TCP接收缓冲区是否有数据可读。
+> 远端有没有数据过来，内核相应的 sockfd 对应的 TCP 接收缓冲区是否有数据可读。
 >
-> 数据就绪阶段分为阻塞和非阻塞，表现得结果是**阻塞当前线程，或是直接返回。**
+> 数据就绪阶段分为阻塞和非阻塞，表现得结果是 **阻塞当前线程，或是直接返回。**
 
 - **阻塞**
 
-  当这个IO工作在阻塞模式下，调用receive接口时，如果数据没有就绪，receive会**阻塞当前这个进程**。
+  当这个 IO 工作在阻塞模式下，调用 receive 接口时，如果数据没有就绪，receive 会 **阻塞当前这个进程**。
 
 - **非阻塞**
 
-  如果是非阻塞状态下，调用receive时，会**立即返回**，根据返回值来判断非阻塞状态。
+  如果是非阻塞状态下，调用 receive 时，会 **立即返回**，根据返回值来判断非阻塞状态。
 
 
 
@@ -115,41 +115,37 @@
 
 - **同步：**
 
-  - 应用层调用receive这个接口会继续，相当于**花应用程序自己的时间**
-  - 把这个sockfd上的数据从内核的TCP接收缓冲区，拷贝到给receive传的应用程序缓冲区buf中，拷贝数据过程中，应用程序**一直等待**数据拷贝完成以后，receive才返回的
+  - 应用层调用 receive 这个接口会继续，相当于 **花应用程序自己的时间**
+  - 把这个 sockfd 上的数据从内核的 TCP 接收缓冲区，拷贝到给 receive 传的应用程序缓冲区 buf 中，拷贝数据过程中，应用程序 **一直等待** 数据拷贝完成以后，receive 才返回的
 
 - **异步：**
 
-  - 调用异步IO接口时，需要**传sockfd**，对应一个TCP缓冲区；
-  - 还有**buf**，如果sockfd上有数据可读，要把这个内核缓冲区的数据搬到应用程序的哪一块buf中；
-  - 还有**通知方式（异步的特点）**，可以通过信号告诉异步IO，负责**帮我监听**sockfd上是否有数据可读，有的话就帮我把数据从内核的TCP缓冲区搬到我给你传的buf里。
+  - 调用异步 IO 接口时，需要 **传 sockfd**，对应一个 TCP 缓冲区；
+  - 还有 **buf**，如果 sockfd 上有数据可读，要把这个内核缓冲区的数据搬到应用程序的哪一块 buf 中；
+  - 还有 **通知方式（异步的特点）**，可以通过信号告诉异步 IO，负责 **帮我监听** sockfd 上是否有数据可读，有的话就帮我把数据从内核的 TCP 缓冲区搬到我给你传的 buf 里。
   
-  - 然后**应用程序就可以处理其他事情了**。
+  - 然后 **应用程序就可以处理其他事情了**。
   - 最后通过事先约定好的通知方式，来通知我应用程序，应用程序就可以处理这个事件了，数据也已经收到了。
 
 
 
-**以上是系统IO方面的同步和异步，业务层面的同步和异步，主要原理是一样的。**
+**以上是系统 IO 方面的同步和异步，业务层面的同步和异步，主要原理是一样的。**
 
-> 同步：表示A向B请求调用一个网络IO接口时（或者调用某个业务逻辑API接口时），A一直在等待B完成以后返回，数据的读写都是由请求方A自己来完成的（不管是阻塞还是非阻塞）；
+> 同步：表示 A 向 B 请求调用一个网络 IO 接口时（或者调用某个业务逻辑 API 接口时），A 一直在等待 B 完成以后返回，数据的读写都是由请求方 A 自己来完成的（不管是阻塞还是非阻塞）；
 >
-> 异步：表示A向B请求调用一个网络IO接口时（或者调用某个业务逻辑API接口时），**向B传入请求的事件以及事件发生时通知的方式**，A就可以处理其它逻辑了，当B监听到事件处理完成后，会用事先约定好的通知方式，通知A处理结果。
+> 异步：表示 A 向 B 请求调用一个网络 IO 接口时（或者调用某个业务逻辑 API 接口时），**向 B 传入请求的事件以及事件发生时通知的方式**，A 就可以处理其它逻辑了，当 B 监听到事件处理完成后，会用事先约定好的通知方式，通知 A 处理结果。
 >
-> *站在系统IO的角度，A就是应用程序，B就是操作系统*
+> *站在系统 IO 的角度，A 就是应用程序，B 就是操作系统*
 
 
 
-
-
->  ***陈硕：在处理IO的时候，阻塞和非阻塞都是同步IO，只有使用了特殊API才是异步IO。***
+> ***陈硕：在处理 IO 的时候，阻塞和非阻塞都是同步 IO，只有使用了特殊 API 才是异步 IO。***
 >
 >  <img src="pic/image-20250331154433407.png" alt="image-20250331154433407" style="zoom:50%;" />
 
 
 
-
-
-## Unix/Linux上的五种IO模型
+## Unix/Linux 上的五种 IO 模型
 
 ### 同步阻塞
 
@@ -165,7 +161,7 @@
 
 
 
-### IO复用 ⭐
+### IO 复用 ⭐
 
 > 同步
 
@@ -173,27 +169,25 @@
 
 
 
-和上面的区别是，从数据未就绪到就绪，只调用read换成了调用**IO复用接口**。
+和上面的区别是，从数据未就绪到就绪，只调用 read 换成了调用 **IO 复用接口**。
 
-**一个线程调用一个IO复用接口，一个IO复用可以监听很多个socket**（上面的同步阻塞和非阻塞一次只能处理一个socket）
+**一个线程调用一个 IO 复用接口，一个 IO 复用可以监听很多个 socket**（上面的同步阻塞和非阻塞一次只能处理一个 socket）
 
-当多个socket有数据可操作的话，IO复用会给应用程序**返回有可操作数据的这些socket的列表**，再根据这些事件的fd，进行相应的操作。
+当多个 socket 有数据可操作的话，IO 复用会给应用程序 **返回有可操作数据的这些 socket 的列表**，再根据这些事件的 fd，进行相应的操作。
 
-通过多路IO复用，能使得**一个进程同时处理多路IO**。
-
-
+通过多路 IO 复用，能使得 **一个进程同时处理多路 IO**。
 
 
 
 ### 信号驱动
 
-> linux系统特有
+> linux 系统特有
 
 <img src="pic/image-20250402104147776.png" alt="image-20250402104147776" style="zoom: 50%;" />
 
-内核在**第一个阶段是异步，第二个阶段是同步**。
+内核在 **第一个阶段是异步，第二个阶段是同步**。
 
-与非阻塞IO的区别在于它提供了**消息通知机制**（SIGIO），不需要用户进程不断的轮询检查，减少了系统API的调用次数，提高了效率。
+与非阻塞 IO 的区别在于它提供了 **消息通知机制**（SIGIO），不需要用户进程不断的轮询检查，减少了系统 API 的调用次数，提高了效率。
 
 
 
@@ -201,17 +195,17 @@
 
 > 异步非阻塞是最典型的
 >
-> Linux也提供了aio_read和aio_write
+> Linux 也提供了 aio_read 和 aio_write
 
 <img src="pic/image-20250402104534130.png" alt="image-20250402104534130" style="zoom:50%;" />
 
 
 
-## 多进程and多线程并发
+## 多进程 and 多线程并发
 
 ### 多进程并发
 
-多进程并发模型在同步阻塞迭代模型的基础上进行了一些改进，以避免是程序阻塞在read系统调用上。
+多进程并发模型在同步阻塞迭代模型的基础上进行了一些改进，以避免是程序阻塞在 read 系统调用上。
 
 ~~~C++
 bind(srvfd);
@@ -235,23 +229,23 @@ switch( ret )
 }
 void client_handler(clifd)
 {
-    read(clifd,buf,...); //从客户端读取数据
+    read(clifd, buf,...); //从客户端读取数据
     dosomthingonbuf(buf);
-    write(clifd,buf)//发送数据到客户端
+    write(clifd, buf)//发送数据到客户端
 }
 ~~~
 
-在accept系统调用时，如果没有客户端来建立连接，会阻塞在accept处。一旦某个客户端连接建立起来，则立即开启一个新的进程来处理与这个客户的数据交互。避免程序阻塞在read调用，而影响其他客户端的连接。
+在 accept 系统调用时，如果没有客户端来建立连接，会阻塞在 accept 处。一旦某个客户端连接建立起来，则立即开启一个新的进程来处理与这个客户的数据交互。避免程序阻塞在 read 调用，而影响其他客户端的连接。
 
 
 
 ### 多线程并发
 
-在多进程并发模型中，每一个客户端连接开启fork一个进程，若客户端连接较大，则系统依然将不堪负重。
+在多进程并发模型中，每一个客户端连接开启 fork 一个进程，若客户端连接较大，则系统依然将不堪负重。
 
 通过多线程(或线程池)并发模型，可以在一定程度上改善这一问题。
 
-**在服务端的线程模型实现方式**一般有三种：
+**在服务端的线程模型实现方式** 一般有三种：
 
 - 按需生成(来一个连接生成一个线程)
 - 线程池(预先生成很多线程)
@@ -260,7 +254,7 @@ void client_handler(clifd)
 以第一种为例，其核心代码如下：
 
 ~~~C++
-void *thread_callback( void *args ) //线程回调函数
+void *thread_callback( void * args ) //线程回调函数
 {
     int clifd = *(int *)args ;
     client_handler(clifd);
@@ -268,22 +262,22 @@ void *thread_callback( void *args ) //线程回调函数
 
 void client_handler(clifd)
 {
-    read(clifd,buf,...); //从客户端读取数据
+    read(clifd, buf,...); //从客户端读取数据
     dosomthingonbuf(buf);
-    write(clifd,buf)//发送数据到客户端
+    write(clifd, buf)//发送数据到客户端
 }
 bind(srvfd);
 listen(srvfd);
 for(;;)
 {
-    clifd = accept(); // 主线程负责accept
-    pthread_create(...,thread_callback,&clifd);
+    clifd = accept(); // 主线程负责 accept
+    pthread_create(..., thread_callback,&clifd);
 }
 ~~~
 
-服务端分为**主线程**和**工作线程**
+服务端分为 **主线程** 和 **工作线程**
 
-- 主线程负责accept()连接
+- 主线程负责 accept()连接
 - 工作线程负责处理业务逻辑和流的读取等。
 
 因此，即使在工作线程阻塞的情况下，也只是阻塞在线程范围内，对继续接受新的客户端连接不会有影响。
@@ -301,39 +295,33 @@ for(;;)
 
 
 
-
-
-
-
 ## IO 多路复用
 
-多进程模型和多线程(线程池)模型每个进程/线程只能处理一路IO，在服务器并发数较高的情况下，过多的进程/线程会使得服务器性能下降。
+多进程模型和多线程(线程池)模型每个进程/线程只能处理一路 IO，在服务器并发数较高的情况下，过多的进程/线程会使得服务器性能下降。
 
-通过多路IO复用，能使得**一个进程同时处理多路IO**
-
-
+通过多路 IO 复用，能使得 **一个进程同时处理多路 IO**
 
 
 
-IO复用的实现方式目前主要有**select、poll和epoll**
+IO 复用的实现方式目前主要有 **select、poll 和 epoll**
 
-- select和poll的原理基本相同：
-  - 注册待侦听的fd(这里的fd创建时最好使用非阻塞)
-  - 每次调用都去检查这些fd的状态，当有一个或者多个fd就绪的时候返回
-  - 返回结果中包括已就绪和未就绪的fd
+- select 和 poll 的原理基本相同：
+  - 注册待侦听的 fd(这里的 fd 创建时最好使用非阻塞)
+  - 每次调用都去检查这些 fd 的状态，当有一个或者多个 fd 就绪的时候返回
+  - 返回结果中包括已就绪和未就绪的 fd
 
-相比select，**poll解决了单个进程能够打开的文件描述符数量有限制这个问题**：select受限于FD_SIZE的限制，如果修改则需要修改这个宏重新编译内核；而poll通过一个pollfd数组向内核传递需要关注的事件，避开了文件描述符数量限制。
+相比 select，**poll 解决了单个进程能够打开的文件描述符数量有限制这个问题**：select 受限于 FD_SIZE 的限制，如果修改则需要修改这个宏重新编译内核；而 poll 通过一个 pollfd 数组向内核传递需要关注的事件，避开了文件描述符数量限制。
 
-此外，select和poll共同具有的一个很大的缺点就是**包含大量fd的数组被整体复制于用户态和内核态地址空间之间**，开销会随着fd数量增多而线性增大。
+此外，select 和 poll 共同具有的一个很大的缺点就是 **包含大量 fd 的数组被整体复制于用户态和内核态地址空间之间**，开销会随着 fd 数量增多而线性增大。
 
 
 
-**epoll的出现，解决了select、poll的缺点：**
+**epoll 的出现，解决了 select、poll 的缺点：**
 
-- 基于事件驱动的方式，避免了每次都要把所有fd都扫描一遍。
-- epoll_wait只返回就绪的fd。
-- epoll使用nmap内存映射技术避免了内存复制的开销。
-- epoll的fd数量上限是操作系统的最大文件句柄数目,这个数目一般和内存有关，通常远大于1024。
+- 基于事件驱动的方式，避免了每次都要把所有 fd 都扫描一遍。
+- epoll_wait 只返回就绪的 fd。
+- epoll 使用 nmap 内存映射技术避免了内存复制的开销。
+- epoll 的 fd 数量上限是操作系统的最大文件句柄数目, 这个数目一般和内存有关，通常远大于 1024。
 
 
 
@@ -345,48 +333,40 @@ IO复用的实现方式目前主要有**select、poll和epoll**
 
 
 
-
-
-
-
-
-
 ## One loop per thread
 
->  在这个多核时代，服务端网络编程如何选择线程模型呢？**One loop per thread**
+> 在这个多核时代，服务端网络编程如何选择线程模型呢？**One loop per thread**
 
-**one loop per thread**指的是：
+**one loop per thread** 指的是：
 
 - **一个线程只能有一个事件循环（EventLoop）**
-- **一个文件描述符（file descriptor，通常简称fd）只能由一个线程进行读写，**换句话说就是一个TCP连接必须归属于某个EventLoop管理。但返过来不一样，一个线程却可以管理多个fd。
+- **一个文件描述符（file descriptor，通常简称 fd）只能由一个线程进行读写，** 换句话说就是一个 TCP 连接必须归属于某个 EventLoop 管理。但返过来不一样，一个线程却可以管理多个 fd。
 
-这样多线程服务端编程的问题就转换为**如何设计一个高效且易于使用的event loop**，然后**每个线程run一个event loop**就行了。（当然线程间的同步、互斥少不了，还有其它的耗时事件需要起另外的线程来做）
+这样多线程服务端编程的问题就转换为 **如何设计一个高效且易于使用的 event loop**，然后 **每个线程 run 一个 event loop** 就行了。（当然线程间的同步、互斥少不了，还有其它的耗时事件需要起另外的线程来做）
 
-event loop 是 non-blocking 网络编程的核心，在现实生活中，**non-blocking 几乎总是和 IO multiplexing一起使用**，原因有两点：
+event loop 是 non-blocking 网络编程的核心，在现实生活中，**non-blocking 几乎总是和 IO multiplexing 一起使用**，原因有两点：
 
-- 没有人真的会用轮询 (busy-pooling) 来检查某个 non-blocking IO 操作是否完成，这样太浪费CPU资源了
-- IO-multiplex 一般不能和 blocking IO 用在一起，因为 blocking IO 中read()/write()/accept()/connect() 都有可能阻塞当前线程，这样线程就没办法处理其他 socket上的 IO 事件了。
+- 没有人真的会用轮询 (busy-pooling) 来检查某个 non-blocking IO 操作是否完成，这样太浪费 CPU 资源了
+- IO-multiplex 一般不能和 blocking IO 用在一起，因为 blocking IO 中 read()/write()/accept()/connect() 都有可能阻塞当前线程，这样线程就没办法处理其他 socket 上的 IO 事件了。
 
 当我们提到 non-blocking 的时候，实际上指的是 **non-blocking + IO-multiplexing (+线程池)**，单用其中任何一个都没有办法很好的实现功能。
 
 
 
-> epoll + fork不如epoll + pthread？
-> 强大的nginx服务器采用了epoll+fork模型作为网络模块的架构设计，实现了简单好用的负载算法，使各个fork网络进程不会忙的越忙、闲的越闲，并且通过引入一把乐观锁解决了该模型导致的服务器惊群现象，功能十分强大。
+> epoll + fork 不如 epoll + pthread？
+> 强大的 nginx 服务器采用了 epoll+fork 模型作为网络模块的架构设计，实现了简单好用的负载算法，使各个 fork 网络进程不会忙的越忙、闲的越闲，并且通过引入一把乐观锁解决了该模型导致的服务器惊群现象，功能十分强大。
 
 
 
-
-
-## Reactor模型
+## Reactor 模型
 
 > 反应器（Reactor）设计模式是一种事件处理模式，用于处理由一个或多个输入并发传递到服务处理器的服务请求。服务处理器对接收到的请求进行分发（demultiplexing），并同步调度到相应的请求处理器进行处理。
 
-muduo项目采用主从 **多Reactor多线程** 模型
+muduo 项目采用主从 **多 Reactor 多线程** 模型
 
 **MainReactor** 只负责监听派发新连接，在 MainReactor 中通过 **Acceptor** 接收新连接，并通过设计好的轮询算法派发给 **SubReactor**，SubReactor 负责此连接的读写事件。
 
-调用 **TcpServer** 的 start 函数后，会内部创建线程池。每个线程独立的运行一个事件循环，即**SubReactor**。
+调用 **TcpServer** 的 start 函数后，会内部创建线程池。每个线程独立的运行一个事件循环，即 **SubReactor**。
 
 **MainReactor 从线程池中轮询获取 SubReactor 并派发给它新连接，处理读写事件的 SubReactor 个数一般和 CPU 核心数相等。**
 
@@ -408,24 +388,20 @@ muduo项目采用主从 **多Reactor多线程** 模型
 
 **调用关系**
 
-- 将事件及其处理方法，注册到Reactor，Reactor中主要存储了事件和事件对应的处理器
-- Reactor向其所对应的Demultiplex去注册相应的connfd + 事件，启动反应堆
-- 当Demultiplex检测到connfd上有事件发生，就会返回相应事件
-- Reactor根据事件去调用对应的EventHandler
+- 将事件及其处理方法，注册到 Reactor，Reactor 中主要存储了事件和事件对应的处理器
+- Reactor 向其所对应的 Demultiplex 去注册相应的 connfd + 事件，启动反应堆
+- 当 Demultiplex 检测到 connfd 上有事件发生，就会返回相应事件
+- Reactor 根据事件去调用对应的 EventHandler
 
 ![image-20250402152219420](pic/image-20250402152219420.png)
 
 
 
+**muduo 库** 的 Multiple Reactors 模型如下：
 
-
-**muduo库**的Multiple Reactors模型如下：
-
-> 这里的Reactor相当于上面的Reactor和Demultiplex的合体
+> 这里的 Reactor 相当于上面的 Reactor 和 Demultiplex 的合体
 
 <img src="pic/image-20250402153059477.png" alt="image-20250402153059477" style="zoom: 50%;" />
-
-
 
 
 
@@ -435,9 +411,7 @@ muduo项目采用主从 **多Reactor多线程** 模型
 
 
 
-
-
-## epoll
+# epoll ⭐
 
 `epoll` 是 Linux 内核提供的高效 I/O 事件通知机制，用于处理大量并发连接。
 
@@ -445,11 +419,13 @@ muduo项目采用主从 **多Reactor多线程** 模型
 - **等待事件发生**（阻塞或非阻塞方式）
 - **获取就绪的文件描述符**（仅返回有事件的，不需要遍历全部）
 
-它的核心作用是**监听多个文件描述符（如套接字）是否有事件发生，并高效返回就绪的文件描述符**，避免了传统 `select/poll` 方式的低效轮询。
+它的核心作用是 **监听多个文件描述符（如套接字）是否有事件发生，并高效返回就绪的文件描述符**，避免了传统 `select/poll` 方式的低效轮询。
 
-就像一个**智能消息通知系统**，你告诉它要关注哪些文件（比如网络连接），它会在这些文件有变化（比如数据可读）时**只通知你有变化的那些**，而不是让你一个个去检查。这样能**高效处理大量并发连接**，比如服务器同时和成千上万的客户端通信。
+就像一个 **智能消息通知系统**，你告诉它要关注哪些文件（比如网络连接），它会在这些文件有变化（比如数据可读）时 **只通知你有变化的那些**，而不是让你一个个去检查。这样能 **高效处理大量并发连接**，比如服务器同时和成千上万的客户端通信。
 
-### **select**
+
+
+## select
 
 **`select`** 也是 Linux 提供的 **I/O 多路复用** 机制，用于同时监听多个文件描述符的事件（如可读、可写）。它的主要特点是：
 
@@ -457,33 +433,25 @@ muduo项目采用主从 **多Reactor多线程** 模型
 - 最大支持 1024/2048 个文件描述符（具体取决于系统）。
 - 每次调用 `select` 都要重新填充 `fd_set` 并遍历整个列表，即使只有少数文件描述符有事件，效率低。
 
-**select的缺点**
+**select 的缺点**
 
-- 单个进程能够监视的文件描述符的数量存在最大限制，通常是1024，当然可以更改数量，但由于select采用轮询的方式扫描文件描述符，文件描述符数量越多，性能越差；在linux内核头文件中，有这样的定义：#define __FD_SETSIZE 1024
+- 单个进程能够监视的文件描述符的数量存在最大限制，通常是 1024，当然可以更改数量，但由于 select 采用轮询的方式扫描文件描述符，文件描述符数量越多，性能越差；在 linux 内核头文件中，有这样的定义：#define __FD_SETSIZE 1024
 
-- 内核 / 用户空间内存拷贝问题，select需要复制大量的句柄数据结构，产生巨大的开销
-- select返回的是含有整个句柄的数组，应用程序需要遍历整个数组才能发现哪些句柄发生了事件
-- select的触发方式是水平触发，应用程序如果没有完成对一个已经就绪的文件描述符进行IO操作，那么之后每次select调用还是会将这些文件描述符通知进程
+- 内核 / 用户空间内存拷贝问题，select 需要复制大量的句柄数据结构，产生巨大的开销
+- select 返回的是含有整个句柄的数组，应用程序需要遍历整个数组才能发现哪些句柄发生了事件
+- select 的触发方式是水平触发，应用程序如果没有完成对一个已经就绪的文件描述符进行 IO 操作，那么之后每次 select 调用还是会将这些文件描述符通知进程
 
-相比select模型，**poll使用链表保存文件描述符，因此没有了监视文件数量的限制**，但其他三个缺点依然存在。
+相比 select 模型，**poll 使用链表保存文件描述符，因此没有了监视文件数量的限制**，但其他三个缺点依然存在。
 
-**epoll的实现机制与select/poll机制完全不同，它们的缺点在epoll上不复存在。**
-
-
-
-### Epoll的原理及优势
+**epoll 的实现机制与 select/poll 机制完全不同，它们的缺点在 epoll 上不复存在。**
 
 
 
+## Epoll 的原理及优势
 
 
 
-
-
-
-
-
-# sys/epoll.h
+## sys/epoll.h
 
 该头文件定义了 Linux 下 **epoll 的核心接口和数据结构**，是高性能 I/O 多路复用的重要基础设施之一。
 
@@ -518,7 +486,7 @@ muduo项目采用主从 **多Reactor多线程** 模型
 #include <bits/epoll.h> // 平台相关的 epoll 常量和实现定义
 
 /* 数据结构打包宏 */
-#ifndef __EPOLL_PACKED	// 条件定义 __EPOLL_PACKED，可用于结构体内存对齐优化（目前未具体实现）
+#ifndef __EPOLL_PACKED	// 条件定义 __ EPOLL_PACKED，可用于结构体内存对齐优化（目前未具体实现）
 # define __EPOLL_PACKED
 #endif
 
@@ -533,7 +501,7 @@ enum EPOLL_EVENTS
 #define EPOLLPRI EPOLLPRI
     EPOLLOUT = 0x004,	 // 有数据可写
 #define EPOLLOUT EPOLLOUT
-    EPOLLRDNORM = 0x040, // 普通可读数据（与EPOLLIN重合）
+    EPOLLRDNORM = 0x040, // 普通可读数据（与 EPOLLIN 重合）
 #define EPOLLRDNORM EPOLLRDNORM
     EPOLLRDBAND = 0x080, // 优先级带可读数据
 #define EPOLLRDBAND EPOLLRDBAND
@@ -549,9 +517,9 @@ enum EPOLL_EVENTS
 #define EPOLLHUP EPOLLHUP
     EPOLLRDHUP = 0x2000,// 对端关闭了读操作
 #define EPOLLRDHUP EPOLLRDHUP
-    EPOLLEXCLUSIVE = 1u << 28,	// 仅用于epoll实现的锁优化（不能用户级设置）
+    EPOLLEXCLUSIVE = 1u << 28,	// 仅用于 epoll 实现的锁优化（不能用户级设置）
 #define EPOLLEXCLUSIVE EPOLLEXCLUSIVE
-    EPOLLWAKEUP = 1u << 29,		// 防止系统挂起（需要CAP_BLOCK_SUSPEND权限）
+    EPOLLWAKEUP = 1u << 29,		// 防止系统挂起（需要 CAP_BLOCK_SUSPEND 权限）
 #define EPOLLWAKEUP EPOLLWAKEUP
     EPOLLONESHOT = 1u << 30,	// 一次触发事件后必须重新注册
 #define EPOLLONESHOT EPOLLONESHOT
@@ -565,16 +533,16 @@ enum EPOLL_EVENTS
 * 其操作码（operation code）用于指定你想对 epoll 实例执行的操作
 */
 
-/* Valid opcodes ( "op" parameter ) to issue to epoll_ctl(). epoll_ctl操作码 */
-// 注册新的fd到epoll实例
+/* Valid opcodes ( "op" parameter ) to issue to epoll_ctl(). epoll_ctl 操作码 */
+// 注册新的 fd 到 epoll 实例
 #define EPOLL_CTL_ADD 1	/* Add a file descriptor to the interface.  */
-// 从epoll实例移除fd
+// 从 epoll 实例移除 fd
 #define EPOLL_CTL_DEL 2	/* Remove a file descriptor from the interface.  */
-// 修改fd的监听事件
+// 修改 fd 的监听事件
 #define EPOLL_CTL_MOD 3	/* Change file descriptor epoll_event structure.  */
 
 
-// 用户自定义数据，用于epoll事件附带的数据，用户可自由使用
+// 用户自定义数据，用于 epoll 事件附带的数据，用户可自由使用
 typedef union epoll_data
 {
   void *ptr;	
@@ -584,28 +552,28 @@ typedef union epoll_data
 } epoll_data_t;
 
 
-// 核心事件结构体，用户在调用epoll_ctl和epoll_wait是传入或接收该结构体
+// 核心事件结构体，用户在调用 epoll_ctl 和 epoll_wait 是传入或接收该结构体
 struct epoll_event
 {
-  uint32_t events;	/* Epoll events 事件掩码（EPOLLIN等）*/
+  uint32_t events;	/* Epoll events 事件掩码（EPOLLIN 等）*/
   epoll_data_t data;	/* User data variable 用户数据*/
 } __EPOLL_PACKED;
 
 
-__BEGIN_DECLS // C语言兼容标记，用于兼容C++，声明extern"C"
+__BEGIN_DECLS // C 语言兼容标记，用于兼容 C++，声明 extern "C"
 
 
-// 创建epoll实例
+// 创建 epoll 实例
 /* Creates an epoll instance.  Returns an fd for the new instance.
    The "size" parameter is a hint specifying the number of file
    descriptors to be associated with the new instance.  The fd
    returned by epoll_create() should be closed with close().  */
-extern int epoll_create (int __size) __THROW;
+extern int epoll_create (int __size) __ THROW;
 
-// 创建带标志位的epoll实例
+// 创建带标志位的 epoll 实例
 /* Same as epoll_create but with an FLAGS parameter.  The unused SIZE
    parameter has been dropped.  */
-extern int epoll_create1 (int __flags) __THROW;
+extern int epoll_create1 (int __flags) __ THROW;
 
 
 // 注册/删除/修改 epoll 事件
@@ -647,7 +615,7 @@ extern int epoll_wait (
    This function is a cancellation point and therefore not marked with
    __THROW.  */
 extern int epoll_pwait (int __epfd, struct epoll_event *__events,
-			int __maxevents, int __timeout,
+			int __maxevents, int __ timeout,
 			const __sigset_t *__ss);
 
 /* Same as epoll_pwait, but the timeout as a timespec.
@@ -660,7 +628,7 @@ extern int epoll_pwait2 (int __epfd, struct epoll_event *__events,
 			 const __sigset_t *__ss);
 #else
 # ifdef __REDIRECT
-extern int __REDIRECT (epoll_pwait2, (int __epfd, struct epoll_event *__ev,
+extern int __REDIRECT (epoll_pwait2, (int __ epfd, struct epoll_event *__ev,
 				      int __maxevs,
 				      const struct timespec *__timeout,
 				      const __sigset_t *__ss),
@@ -676,10 +644,12 @@ __END_DECLS
 
 ~~~
 
-## epoll_event
 
-~~~C++ 
-// 用户自定义数据，用于epoll事件附带的数据，用户可自由使用 
+
+### epoll_event
+
+~~~C++
+// 用户自定义数据，用于 epoll 事件附带的数据，用户可自由使用 
 typedef union epoll_data
 {
   void *ptr;	// 用户可以传入一个指针，用来在回调时识别来源	
@@ -689,14 +659,14 @@ typedef union epoll_data
 } epoll_data_t;
 ~~~
 
-`epoll_data`是一个C语言联合体，用于存放用户自定义的信息，这个信息会随着事件一起返回。
+`epoll_data` 是一个 C 语言联合体，用于存放用户自定义的信息，这个信息会随着事件一起返回。
 
-epoll 不关心你到底存了什么，它只是“帮你带回来”
+epoll 不关心你到底存了什么，它只是“**帮你带回来**”
 
 epoll_wait 返回事件时，你就可以从 `epoll_event.data` 中拿到之前存的数据，来判断“是哪个 fd 触发的”或“这个 fd 对应哪个连接”等信息。
 
-~~~C++ 
-// epoll核心事件结构体，用户在调用epoll_ctl和epoll_wait是传入或接收该结构体
+~~~C++
+// epoll 核心事件结构体，用户在调用 epoll_ctl 和 epoll_wait 是传入或接收该结构体
 struct epoll_event
 {
   uint32_t events;	 // 关心的事件
@@ -713,19 +683,19 @@ struct epoll_event
 - `EPOLLHUP`：挂起
 - `EPOLLERR`：错误
 
-**用到的事件类型 `EPOLLIN`、`EPOLLPRI`、`EPOLLOUT`** 
+**用到的事件类型 `EPOLLIN`、`EPOLLPRI`、`EPOLLOUT`**
 
 这些宏定义来自 `<sys/epoll.h>`，用于表示 **内核态监听文件描述符（fd）上发生的事件类型**。
 
 ~~~C++
-// epoll.h中
+// epoll.h 中
 enum EPOLL_EVENTS
   {
     EPOLLIN = 0x001,		// 0000 0001
-#define EPOLLIN EPOLLIN		// 对应的fd上有数据可读（包括对端关闭的情况）
+#define EPOLLIN EPOLLIN		// 对应的 fd 上有数据可读（包括对端关闭的情况）
     
     EPOLLPRI = 0x002,		// 0000 0010
-#define EPOLLPRI EPOLLPRI	// 对应的fd有紧急数据可读（带外数据）一般用于 TCP 的紧急数据（少见）
+#define EPOLLPRI EPOLLPRI	// 对应的 fd 有紧急数据可读（带外数据）一般用于 TCP 的紧急数据（少见）
     
     EPOLLOUT = 0x004,		// 0000 0100
 #define EPOLLOUT EPOLLOUT	// 对应的 fd 可以进行 非阻塞写操作
@@ -741,11 +711,9 @@ enum EPOLL_EVENTS
 
 
 
+### epoll 生命周期
 
-
-## epoll生命周期
-
-~~~C++ 
+~~~C++
 1. 创建 epoll 实例
    ┌─────────────────────────────┐
    │ epollfd = epoll_create1()   │  → 创建成功后返回一个 epoll 实例的 fd
@@ -753,7 +721,7 @@ enum EPOLL_EVENTS
 
 2. 注册 / 修改 / 删除感兴趣的事件（对应的 fd）
    ┌────────────────────────────────────────────────────────────────┐
-   │ epoll_ctl(epollfd, EPOLL_CTL_ADD / MOD / DEL, fd, &event)     │
+   │ epoll_ctl(epollfd, EPOLL_CTL_ADD / MOD / DEL, fd, &event)      │
    └────────────────────────────────────────────────────────────────┘
 
 3. 等待事件（阻塞/非阻塞）
@@ -767,39 +735,38 @@ enum EPOLL_EVENTS
    ┌──────────────────────┐
    │ close(epollfd)       │
    └──────────────────────┘
-
 ~~~
 
 
 
-## epoll_create1() 创建epoll实例
+### epoll_create1() 创建 epoll 实例
 
-`epoll_create1` 是 Linux 下用于**创建一个 epoll 实例** 的系统调用。该实例可以用于异步监听多个文件描述符（如 socket）的读写事件。
+`epoll_create1` 是 Linux 下用于 **创建一个 epoll 实例** 的系统调用。该实例可以用于异步监听多个文件描述符（如 socket）的读写事件。
 
 创建成功后，**返回一个指向该 epoll 实例的 文件描述符（fd）**，后续操作（如 `epoll_ctl`、`epoll_wait`）都基于这个 fd。
 
 ~~~C++
 #include <sys/epoll.h>
 
-int epoll_create1(int flags); //flags是控制 epoll 实例行为的标志位，常用值为EPOLL_CLOEXEC
+int epoll_create1(int flags); //flags 是控制 epoll 实例行为的标志位，常用值为 EPOLL_CLOEXEC
 ~~~
 
 **参数 `flags`** ：
 
 - 控制 epoll 实例行为的标志位
 
-- 常见的`flags`：
+- 常见的 `flags`：
 
-  - `EPOLL_CLOEXEC` ：设置close-on-exec标志，当调用`exec()`系列函数时，该fd会自动关闭，防止fd泄漏到子进程中
+  - `EPOLL_CLOEXEC` ：设置 close-on-exec 标志，当调用 `exec()` 系列函数时，该 fd 会自动关闭，防止 fd 泄漏到子进程中
 
   - 如果不需要特殊行为，可以传 `0`
 
 **返回值：**
 
-- `>=0`  创建成功，返回epoll实例的fd
-- `<0`   创建失败，返回 `-1` ，并设置 `errno`错误码
+- `>=0`  创建成功，返回 epoll 实例的 fd
+- `<0`   创建失败，返回 `-1` ，并设置 `errno` 错误码
 
-**常见错误码`errno`：**
+**常见错误码 `errno`：**
 
 | errno 值 | 含义                       |
 | -------- | -------------------------- |
@@ -818,7 +785,7 @@ int epoll_create1(int flags); //flags是控制 epoll 实例行为的标志位，
 
 
 
-**epoll_create() 创建epoll实例（已经不推荐使用了）**
+**epoll_create() 创建 epoll 实例（已经不推荐使用了）**
 
 创建一个 epoll 实例，创建成功会返回一个文件描述符（epfd）。
 
@@ -839,13 +806,13 @@ int epoll_create(int size);
 
 
 
-## epoll_ctl() 添加/修改/删除fd
+### epoll_ctl() 添加/修改/删除 fd
 
 对 epoll 实例添加/修改/删除监听的 fd。
 
 > 在内核中，使用红黑树存储 fd → event 的映射关系，实现高效查找和修改。就绪事件存在一个链表中。
 
-~~~C++ 
+~~~C++
 #include <sys/epoll.h>
 
 int epoll_ctl(int epfd, 
@@ -856,19 +823,19 @@ int epoll_ctl(int epfd,
 
 **参数：**
 
-- `epfd`   由`epoll_create1`返回的epoll文件描述符
+- `epfd`   由 `epoll_create1` 返回的 epoll 文件描述符
 
 - `op` 操作类型（操作码）
 
-  ~~~C++ 
-  #define EPOLL_CTL_ADD 1 // 注册新的fd到epoll实例
-  #define EPOLL_CTL_DEL 2	// 从epoll实例移除fd
-  #define EPOLL_CTL_MOD 3 // 修改fd的监听事件
+  ~~~C++
+  #define EPOLL_CTL_ADD 1 // 注册新的 fd 到 epoll 实例
+  #define EPOLL_CTL_DEL 2	// 从 epoll 实例移除 fd
+  #define EPOLL_CTL_MOD 3 // 修改 fd 的监听事件
   ~~~
 
 - `fd`  目标文件描述符
 
-- `event`  关注的事件集和附加数据（如`data.ptr`）
+- `event`  关注的事件集和附加数据（如 `data.ptr`）
 
 > `epfd` 是通过 `epoll_create()` 或 `epoll_create1()` 返回的 **文件描述符**，它就像其他的 `fd`（如 socket、文件）一样，是一个整数，但这个整数只是一个索引，**指向内核空间中的一个 epoll 实例结构体**。
 >
@@ -891,11 +858,9 @@ int epoll_ctl(int epfd,
 
 
 
+### epoll_wait() 等待事件
 
-
-## epoll_wait() 等待事件
-
-等待 epoll 实例中发生的 I/O 事件。将发生的事件存入`events`数组，返回发生事件数量。
+等待 epoll 实例中发生的 I/O 事件。将发生的事件存入 `events` 数组，返回发生事件数量。
 
 ~~~C++
 int epoll_wait(int epfd, 
@@ -932,9 +897,9 @@ int epoll_wait(int epfd,
 
 
 
-## close() 关闭epoll实例
+### close() 关闭 epoll 实例
 
-[`close()`](#close())用于**关闭一个打开的文件描述符**，释放与之相关的所有内核资源。头文件 `<unistd.h>`
+[`close()`](#close())用于 **关闭一个打开的文件描述符**，释放与之相关的所有内核资源。头文件 `<unistd.h>`
 
 ~~~C++
 #include <unistd.h>
@@ -948,7 +913,7 @@ int close(int fd);
 **返回值：**
 
 - 成功返回 0
-- 失败返回 -1 ，并设置`errno`，常见错误：
+- 失败返回 -1 ，并设置 `errno`，常见错误：
   - `EBADF`：传入的 `fd` 无效，可能已关闭或未打开
   - `EINTR`：被信号中断
 
@@ -966,7 +931,7 @@ close(epfd);  // 关闭 epoll 实例，释放内核资源
 
 `close(epfd)` 会触发内核将该 epoll 实例释放，同时注销其上挂载的所有 fd 和事件
 
-如果**忘记 close**：
+如果 **忘记 close**：
 
 - 内核资源泄漏（epoll 结构未释放）
 - 系统文件描述符耗尽（EMFILE）
@@ -974,43 +939,43 @@ close(epfd);  // 关闭 epoll 实例，释放内核资源
 
 
 
-# socket
+# socket ⭐
 
 > 插座？ 接口？反正不叫套接字
 
 ## socket 基础
 
-### 什么是Socket？
+### 什么是 Socket？
 
-> 客户端和服务器能在网络中通信，需要使用Socket编程。
+> 客户端和服务器能在网络中通信，需要使用 Socket 编程。
 
-**Socket是进程间通信的方式、接口**
+**Socket 是进程间通信的方式、接口**
 
-Socket 是操作系统提供的一种通信机制，为**进程间通信**提供统一的**接口**。
+Socket 是操作系统提供的一种通信机制，为 **进程间通信** 提供统一的 **接口**。
 
 应用程序通过创建一个 socket 连接到网络，就像插头插入插座一样，与其他进程通信。
 
-Socket 利用**三元组（ip地址，协议，端口）**就可以唯一标识网络中的进程，网络中的进程通信可以利用这个标志与其它进程进行交互。
+Socket 利用 **三元组（ip 地址，协议，端口）** 就可以唯一标识网络中的进程，网络中的进程通信可以利用这个标志与其它进程进行交互。
 
 
 
-**Socket 封装TCP/IP协议族，对应用程序提供接口**
+**Socket 封装 TCP/IP 协议族，对应用程序提供接口**
 
-> 操作系统需要实现一组**系统调用**，使得**应用程序能访问网络协议提供的服务**，实现这组系统调用的**API**（应用程序编程接口），主要有两套：**Socket**，XTI（基本不用）
+> 操作系统需要实现一组 **系统调用**，使得 **应用程序能访问网络协议提供的服务**，实现这组系统调用的 **API**（应用程序编程接口），主要有两套：**Socket**，XTI（基本不用）
 
-Socket 是对 TCP/IP 协议族的一种封装，是应用层与TCP/IP协议族通信的中间软件抽象层，是一组接口。
+Socket 是对 TCP/IP 协议族的一种封装，是应用层与 TCP/IP 协议族通信的中间软件抽象层，是一组接口。
 
 
 
 <img src="pic/image-20250325161028879.png" alt="image-20250325161028879" style="zoom:50%;" />
 
-从设计模式的角度看来，Socket其实就是一个门面模式，它**把复杂的TCP/IP协议族隐藏在Socket接口后面**，对用户来说，一组简单的接口就是全部，让Socket去组织数据，以符合指定的协议。
+从设计模式的角度看来，Socket 其实就是一个门面模式，它 **把复杂的 TCP/IP 协议族隐藏在 Socket 接口后面**，对用户来说，一组简单的接口就是全部，让 Socket 去组织数据，以符合指定的协议。
 
 
 
-**由Socket定义的这一组API提供的两点功能：**
+**由 Socket 定义的这一组 API 提供的两点功能：**
 
-- 将应用程序数据，从用户缓冲区，复制到TCP/UDP内核发送缓冲区，以交付内核来发送数据；或者是从内核TCP/UDP接收区中复制数据到用户缓冲区
+- 将应用程序数据，从用户缓冲区，复制到 TCP/UDP 内核发送缓冲区，以交付内核来发送数据；或者是从内核 TCP/UDP 接收区中复制数据到用户缓冲区
 - 应用程序可以通过他们来修改内核中各层协议的某些头部信息或其他数据结构，控制底层通信的行为
 
 
@@ -1019,25 +984,23 @@ Socket 是对 TCP/IP 协议族的一种封装，是应用层与TCP/IP协议族�
 
 
 
-### Socket分类
+### Socket 分类
 
-- SOCK_STREAM流式：提供一种**可靠的、面向连接的双向**数据通信，底层是TCP协议
-- SOCK_DGRAM数据报：提供一种**无连接、不可靠的双向**数据通信，底层是UDP
-- SOCK_RAW原始套接字：允许对**较低层协议（如IP或ICMP）**进行直接访问，能指定IP头部
+- SOCK_STREAM 流式：提供一种 **可靠的、面向连接的双向** 数据通信，底层是 TCP 协议
+- SOCK_DGRAM 数据报：提供一种 **无连接、不可靠的双向** 数据通信，底层是 UDP
+- SOCK_RAW 原始套接字：允许对 **较低层协议（如 IP 或 ICMP）** 进行直接访问，能指定 IP 头部
   
   
 
-
-
-### Socket用到的概念
+### Socket 用到的概念
 
 #### 端口
 
-- 在Internet上有很多这样的主机，这些主机一般运行了多个服务软件，同时提供几种服务。
-- **每种服务都打开一个Socket，并绑定到一个端口上**，不同的端口对应于不同的服务（应用程序）
-- 因此，在网络协议中使用**端口号识别主机上不同的进程**。
+- 在 Internet 上有很多这样的主机，这些主机一般运行了多个服务软件，同时提供几种服务。
+- **每种服务都打开一个 Socket，并绑定到一个端口上**，不同的端口对应于不同的服务（应用程序）
+- 因此，在网络协议中使用 **端口号识别主机上不同的进程**。
 
-> 例如：http使用80端口，FTP使用21端口，SSH 使用 22 端口，DNS 使用 53端口，TelNet使用23端口。
+> 例如：http 使用 80 端口，FTP 使用 21 端口，SSH 使用 22 端口，DNS 使用 53 端口，TelNet 使用 23 端口。
 
 
 
@@ -1055,21 +1018,21 @@ Socket 是对 TCP/IP 协议族的一种封装，是应用层与TCP/IP协议族�
     - 全双工方式传输
     - 数据以字节流的方式传输，传输的数据无消息边界
   - 同步与异步
-    - 同步工作方式是指利用TCP编写的程序执行到监听或接收语句时，在未完成工作（侦听到连接请求或收到对方发来的数据）前不再继续往下执行，线程处于阻塞状态，直到该语句完成相应的工作后才继续执行下一条语句。
+    - 同步工作方式是指利用 TCP 编写的程序执行到监听或接收语句时，在未完成工作（侦听到连接请求或收到对方发来的数据）前不再继续往下执行，线程处于阻塞状态，直到该语句完成相应的工作后才继续执行下一条语句。
     - 异步工作方式是指程序执行到监听或接收语句时，不论工作是否完成，都会继续往下执行。
 
 - **UDP：面向数据报的无连接的协议，提供的是不一定可靠的传输服务**
   - 无连接
     - 是指在正式通信前不必与对方先建立连接，不管对方状态如何都直接发送过去。
     - 这与发手机短信非常相似，只要知道对方的手机号就可以了，不要考虑对方手机处于什么状态。
-    - UDP虽然不能保证数据传输的可靠性，但数据传输的效率较高。
-  - UDP和TCP的区别
-    - UDP不可靠
-    - UDP不能保证有序传输
-  - UDP的优势
-    - UDP速度更快，不需要连接，也不需要传输确认
-    - UDP有消息边界
-    - UDP可以一对多
+    - UDP 虽然不能保证数据传输的可靠性，但数据传输的效率较高。
+  - UDP 和 TCP 的区别
+    - UDP 不可靠
+    - UDP 不能保证有序传输
+  - UDP 的优势
+    - UDP 速度更快，不需要连接，也不需要传输确认
+    - UDP 有消息边界
+    - UDP 可以一对多
 
 
 
@@ -1081,26 +1044,22 @@ Socket 是对 TCP/IP 协议族的一种封装，是应用层与TCP/IP协议族�
 >
 > 解决的方案也比较简单，在传输数据之前和接受数据之后，必须调用 **htonl/htons 或 ntohl/ntohs** 先把数据转换成网络字节序或者把网络字节序转换为机器的字节序。
 
-**网络字节序：**大端
+**网络字节序：** 大端
 
-**本地字节序：**小端
+**本地字节序：** 小端
 
 ~~~C++
 // 假设你传入端口 `port = 0x1F90`（十进制 8080），
 
-// 在本地x86主机（小端）内存里：
+// 在本地 x86 主机（小端）内存里：
 0x90 0x1F
-// 使用htons(port)后（大端）:
+// 使用 htons(port)后（大端）:
 0x1F 0x90 
 ~~~
 
 
 
-
-
-
-
-## 模型 C/S 
+## 模型 C/S
 
 在网络编程中，最常见的是 **客户端 / 服务器（C/S）模型**：（Client - Server）
 
@@ -1108,11 +1067,18 @@ Socket 一般应用模式也是这种。
 
 ![1033738-20161222105102807-1112314980.png](./pic/1033738-20161222105102807-1112314980.png)
 
-两个角色：客户端Client，服务端Server
+**两个角色**：
+
+- 客户端 Client
+  - 主动发起请求
+  - 必须提前知道服务端的 IP 地址和通讯端口
+- 服务端 Server
+  - 等待客户端的连接，为客户端提供服务
+  - 不需要知道客户端的IP
 
 **服务端主要职责**：
 
-- 创建socket
+- 创建 socket
 - 绑定地址 `bind()`
 - 开始监听 `listen()`
 - 接受连接 `accept()`
@@ -1121,12 +1087,10 @@ Socket 一般应用模式也是这种。
 
 **客户端主要职责**：
 
-- 创建socket
+- 创建 socket
 - 连接服务器 `connect()`
 - 通信读写  `read() / write()`
 - 关闭连接 `close()`
-
-
 
 
 
@@ -1134,33 +1098,22 @@ Socket 一般应用模式也是这种。
 
 ### TCP Socket
 
-![TCP通信流程](./pic/socket.jpg)
+![tcp socket](./pic/sock_tcp.png)
 
+【服务端】：
 
+- **创建 Socket**：使用 `socket()` 创建用于监听连接的 Socket
+- **绑定地址**：使用 `bind()` 将 Socket 绑定到指定的监听 ip 和 端口
+- **开始监听**：使用 `listen()` 开始监听客户端连接
+- **接收客户端的连接**：使用 `accept()` 接收客户端的连接请求
+- **关闭 Socket**：通信结束后，使用 `close()` 关闭 socket
 
-### UDP Socket
+【客户端】：
 
-![UDP通信流程](./pic/udp.png)
-
-
-
-服务端：
-
-- 创建用于监听连接的Socket
-- Socket绑定监听端口  `bind()`
-- 开始监听 `listen()`
-- 接收到客户端的连接，用socket对像的Accept()方法创建一个新的用于和客户端进行通信的socket对像
-- 通信结束后一定记得关闭socket
-
-客户端：
-
-- 建立一个Socket
-- 用socket对像的Connect()方法，向服务器发出连接请求
-- 连接成功，就用socket对像的Send()方法向服务器发送信息
-- Receive()方法接受服务器发来的信息
-- 通信结束后一定记得关闭socket
-
-
+- **创建 Socket**：使用 `socket()` 创建 Socket
+- **连接服务器**：使用 `connect()` 向服务器发出连接请求
+- **数据发送**：使用 `send()` 和 `recv()` 进行对服务器的数据收发
+- **关闭 Socket**：通信结束后，使用 `close()` 关闭 socket
 
 
 
@@ -1171,7 +1124,7 @@ Socket 一般应用模式也是这种。
 ~~~C++
 int sockfd = socket(AF_INET, SOCK_STREAM, 0); // 1. 创建 socket
 
-sockaddr_in addr;
+sockaddr_in addr; // 地址结构
 addr.sin_family = AF_INET;
 addr.sin_port = htons(8080);
 addr.sin_addr.s_addr = INADDR_ANY;
@@ -1181,7 +1134,7 @@ listen(sockfd, SOMAXCONN);                    // 3. 开始监听
 
 int connfd = accept(sockfd, NULL, NULL);      // 4. 接受客户端连接
 
-char buffer[1024];
+char buffer [1024];
 read(connfd, buffer, sizeof(buffer));         // 5. 接收客户端数据
 
 write(connfd, "OK", 2);                        // 6. 回复客户端
@@ -1203,6 +1156,137 @@ close(sockfd);                                  // 6. 关闭连接
 
 
 
+### UDP Socket
+
+![udp socket](./pic/sock_udp.png)
+
+
+
+## 地址结构 sockaddr
+
+### sockaddr_in
+
+`sockaddr_in` 是 C/C++ socket 编程中用于 **描述一个 IPv4 的通信地址（IP+端口）的结构体**。直接用。
+
+定义在 `<netinet/in.h>` 中。用于指定 **IP 地址 + 端口号**，比如 `192.168.1.100:8080`。
+
+**结构定义**
+
+~~~C++
+struct sockaddr_in {
+    sa_family_t    sin_family;    // 地址族，必须是 AF_INET（IPv4）
+    in_port_t      sin_port;      // 端口号（16位，网络字节序，大端）
+    struct in_addr sin_addr;      // IP 地址（32位，网络字节序）
+    char           sin_zero [8];  // 填充字段，保持与 sockaddr 结构体大小一致
+};
+~~~
+
+| 字段          | 类型                 | 作用             | 说明                                         |
+| ------------- | -------------------- | ---------------- | -------------------------------------------- |
+| `sin_family`  | `sa_family_t`        | 协议族           | 必须设置为 `AF_INET`，表示 IPv4              |
+| `sin_port`    | `in_port_t` (16-bit) | 端口号           | 需要使用 `htons()` 转为网络字节序（大端序）  |
+| `sin_addr`    | `struct in_addr`     | IPv4 地址        | 需要使用 `inet_addr()`、`inet_pton()` 等赋值 |
+| `sin_zero[8]` | 填充                 | 保持结构大小一致 | 一般用 `memset()` 将整个结构清零             |
+
+
+
+**in_addr**
+
+~~~C++
+struct sockaddr_in {
+    sa_family_t    sin_family;  
+    in_port_t      sin_port;    
+    struct in_addr sin_addr;    // ⭐ IP 地址  in_addr结构
+    ...
+};
+
+struct in_addr {
+    in_addr_t s_addr;           // ⭐⭐ 32 位 IP 地址（uint32_t）
+};
+~~~
+
+
+
+**系统 socket API 使用 `struct sockaddr`地址结构**，作用场景：
+
+- **服务器**：用 `bind()` 把 socket 和一个本地 【IP+端口】绑定
+- **客户端**：用 `connect()` 发起连接请求到目标 【IP+端口】
+
+比如`connect()`：
+
+`connect()` 用于客户端向服务器发起连接请求。它告诉操作系统：“我要连接到这个 IP + 端口，请帮我建立 TCP 连接。”
+
+~~~C++
+// sockadr 对象 addr 传入 connect()
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+// addr   指向目标服务器地址结构（如 sockaddr_in）
+// addrlen 地址结构的大小
+~~~
+
+很多 socket API 用的是 `struct sockaddr*`，这是为了兼容 IPv4/IPv6。
+
+`sockaddr_in` 是 `sockaddr` 的子类型，可通过类型转换使用：
+
+~~~C++
+connect(sockfd, (struct sockaddr*)&addr, sizeof(addr));
+~~~
+
+
+
+### sockaddr
+
+`sockaddr` 是一个通用结构体，是 `bind()` 这样的系统调用所要求的接口；
+
+`sockaddr_in` 是一个具体结构体，包含 IPv4 地址、端口等；是 `sockaddr` 的子类型
+
+可以理解为：`sockaddr_in` 是 `sockaddr` 的 “特化形式”，专门用于 IPv4。
+
+> sockaddr_in 用于 IPv4，sockaddr_in6 用于 IPv6
+
+~~~c++
+// 通用地址结构体
+struct sockaddr {
+ sa_family_t sa_family;    // 地址族，比如 AF_INET (Ipv4)
+ char        sa_data [14]; // 原始地址数据（IP + 端口）
+};
+
+// IPv4 地址结构体
+struct sockaddr_in {
+ sa_family_t    sin_family;  // 地址族（AF_INET）
+ uint16_t       sin_port;    // 端口（网络字节序）
+ struct in_addr sin_addr;    // IP 地址
+ char           sin_zero [8]; // 填充字节
+};
+~~~
+
+
+
+
+
+### 字节序函数
+
+~~~C++
+htons() - Host to Network Short
+	•	功能: 将 16 位短整数（short）从主机字节序 ➡️ 转换为网络字节序。
+	•	原型: uint16_t htons(uint16_t hostshort);
+
+htonl() - Host to Network Long
+	•	功能: 将 32 位长整数（long）从主机字节序 ➡️ 转换为网络字节序。
+	•	原型: uint32_t htonl(uint32_t hostlong);
+
+ntohs() - Network to Host Short
+	•	功能: 将 16 位短整数从网络字节序转换为主机字节序。
+	•	原型: uint16_t ntohs(uint16_t netshort);
+
+ntohl() - Network to Host Long
+	•	功能: 将 32 位长整数从网络字节序转换为主机字节序。
+	•	原型: uint32_t ntohl(uint32_t netlong);
+~~~
+
+
+
+
+
 ## socket API
 
 | 分类         | 函数名                          | 作用说明                                                     | 适用对象      |
@@ -1213,8 +1297,8 @@ close(sockfd);                                  // 6. 关闭连接
 | 接收连接     | `accept()`                      | 接受客户端连接，返回一个新的连接 socket（connfd）            | 服务端        |
 | 发起连接     | `connect()`                     | 主动向服务端发起 TCP 连接请求                                | 客户端        |
 | 读写         | `read()` / `write()`            | 从 socket 读/写数据（字节流）                                | 双方          |
-| 读写（增强） | `send()`/`recv()` /             | TCP专用，发送接收数据<br />与 `read` / `write` 类似，可带 flags 控制行为 | 双方          |
-|              | `sendto()` / `recvfrom()`       | UDP 专用，发送接收数据，指定端口和ip                         | 双方          |
+| 读写（增强） | `send()`/`recv()` /             | TCP 专用，发送接收数据<br />与 `read` / `write` 类似，可带 flags 控制行为 | 双方          |
+|              | `sendto()` / `recvfrom()`       | UDP 专用，发送接收数据，指定端口和 ip                         | 双方          |
 | 地址处理     | `getsockname()`                 | 获取本端 socket 绑定的地址信息                               | 双方          |
 | 地址处理     | `getpeername()`                 | 获取对端（peer）socket 地址信息                              | 双方          |
 | 参数设置     | `setsockopt()`                  | 设置 socket 选项（如：TCP_NODELAY, SO_REUSEADDR）            | 双方          |
@@ -1227,12 +1311,13 @@ close(sockfd);                                  // 6. 关闭连接
 
 ### socket()
 
- Linux/POSIX 系统提供的**系统调用**，用于创建一个socket，即通信端点。
+ Linux/POSIX 系统提供的 **系统调用**，用于创建一个 socket，即**通信端点**。
 
-`::socket()` 是网络通信的第一步，它创建了一个 socket 描述符fd。此描述符随后可用于：绑定（`bind()`）、监听（`listen()`）、接收连接（`accept()`）、主动发起连接（`connect()`）等操作。
+`socket()` 是网络通信的第一步，它**创建了一个 socket 描述符 fd**。此描述符随后可用于：绑定（`bind()`）、监听（`listen()`）、接收连接（`accept()`）、主动发起连接（`connect()`）等操作。
 
 ~~~C++
 int socket(int domain, int type, int protocol);
+//         协议族       Socket类型       具体协议
 ~~~
 
 **参数：**
@@ -1247,53 +1332,51 @@ int socket(int domain, int type, int protocol);
   | `AF_PACKET`  | 底层原始数据包接口（Linux）                 | 抓包、实现网桥等   |
   | `AF_NETLINK` | 内核与用户空间通信                          | 网络管理、内核控制 |
 
-- `type` 套接字类型：
+- `type`   Socket类型：
 
-  | 宏名             | 描述                                                       | 应用场景                    |
-  | ---------------- | ---------------------------------------------------------- | --------------------------- |
-  | `SOCK_STREAM`    | **面向连接**的字节流，可靠、有序、无重复（基于 **TCP**）   | Web、数据库                 |
-  | `SOCK_DGRAM`     | **无连接**的数据报，不可靠但开销小（基于 **UDP**）         | DNS、视频流、VoIP           |
-  | `SOCK_SEQPACKET` | 面向连接、消息边界保留、可靠（用于 `AF_UNIX`）             | 某些系统级通信              |
-  | `SOCK_RAW`       | 原始套接字，可自定义协议头，需特权（用于协议栈研究、抓包） | Wireshark、Ping、Traceroute |
-  | `SOCK_NONBLOCK`  | 设置 socket 为**非阻塞**模式（可通过按位或使用）           | 高性能网络服务器            |
-  | `SOCK_CLOEXEC`   | 设置 close-on-exec，防止文件描述符在 exec 后泄露           | 安全型多进程程序            |
+  | 宏名             | 描述                                                         | 应用场景                    |
+  | ---------------- | ------------------------------------------------------------ | --------------------------- |
+  | `SOCK_STREAM`    | **面向连接**、可靠的**字节流**，有序、无重复（基于 **TCP**） | Web、数据库                 |
+  | `SOCK_DGRAM`     | **无连接** 的**数据报**，不可靠但开销小（基于 **UDP**）      | DNS、视频流、VoIP           |
+  | `SOCK_SEQPACKET` | 面向连接、消息边界保留、可靠（用于 `AF_UNIX`）               | 某些系统级通信              |
+  | `SOCK_RAW`       | 原始套接字，可自定义协议头，需特权（用于协议栈研究、抓包）   | Wireshark、Ping、Traceroute |
+  | `SOCK_NONBLOCK`  | 设置 socket 为 **非阻塞** 模式（可通过按位或使用）           | 高性能网络服务器            |
+  | `SOCK_CLOEXEC`   | 设置 close-on-exec，防止文件描述符在 exec 后泄露             | 安全型多进程程序            |
 
 - `protocol`  具体协议，通常填 0，系统自动选择
 
-  | 值             | 描述                       | 适用场景           |
-  | -------------- | -------------------------- | ------------------ |
-  | `0`            | 默认协议（通常为 TCP/UDP） | 推荐设置           |
-  | `IPPROTO_TCP`  | 明确指定 TCP 协议          | `SOCK_STREAM` 使用 |
-  | `IPPROTO_UDP`  | 明确指定 UDP 协议          | `SOCK_DGRAM` 使用  |
-  | `IPPROTO_ICMP` | ICMP 协议（Ping）          | 使用 `SOCK_RAW`    |
-  | `IPPROTO_RAW`  | 原始 IP 协议               | 安全工具/研究      |
+  | 值             | 描述                                       | 适用场景                 |
+  | -------------- | ------------------------------------------ | ------------------------ |
+  | `0`            | 自适应协议，自动选择协议（通常为 TCP/UDP） | 推荐设置                 |
+  | `IPPROTO_TCP`  | 明确指定 TCP 协议                          | 通常和`SOCK_STREAM` 使用 |
+  | `IPPROTO_UDP`  | 明确指定 UDP 协议                          | 通常和`SOCK_DGRAM` 使用  |
+  | `IPPROTO_ICMP` | ICMP 协议（Ping）                          | 通常和 `SOCK_RAW`使用    |
+  | `IPPROTO_RAW`  | 原始 IP 协议                               | 安全工具/研究            |
 
 **返回值：**
 
-- 成功：返回一个**文件描述符**（int 类型），代表该 socket。
+- 成功：返回一个 **文件描述符 fd**（int 类型），代表该 socket。
 - 失败：返回 -1，并设置全局变量 `errno`，描述具体错误原因（例如 `EMFILE`, `EACCES`, 等）。
 
 **示例：**
 
 ~~~C++
-int sockfd = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
+int sockfd = :: socket(AF_INET, 		// 使用 IPv4 协议
+                       SOCK_STREAM | 	// 使用 TCP，可靠、面向连接的字节流通信
+                       SOCK_NONBLOCK |  // 非阻塞模式，避免 `accept()`、`read()` 等阻塞当前线程
+                       SOCK_CLOEXEC, 	// 在调用 `exec()` 族函数时自动关闭该描述符，防止 fd 泄漏
+                       IPPROTO_TCP);	// 指定使用 TCP 协议
 ~~~
 
-- `AF_INET` 使用IPv4协议
-- `SOCK_STREAM`: 使用 TCP，可靠、面向连接的字节流通信
-- `SOCK_NONBLOCK`: 设置为非阻塞模式，避免 `accept()`、`read()` 等阻塞当前线程
-- `SOCK_CLOEXEC`: 在调用 `exec()` 族函数时自动关闭该描述符，防止 fd 泄漏
-- `IPPROTO_TCP`: 明确指定使用 TCP 协议（即使默认也是 TCP）
 
 
 
 
+### bind()
 
-### ::bind()
+服务端调用，将已创建的 **socket fd 绑定到一个本地地址**。
 
-是 Linux/C 系统提供的函数，将已创建的**socket fd绑定到一个本地地址**。
-
-告诉操作系统：这个 socket 要在哪个 IP 和端口上接收数据或连接。
+告诉操作系统：**这个 socket 要在哪个 IP 和端口上接收数据或连接**。
 
 ~~~c++
 int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
@@ -1301,38 +1384,39 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
 
 **参数：**
 
-- `sockfd` ：通过 `socket()` 创建得到的 socket 文件描述符
-- `addr` ：指向本地地址结构体的指针（通常是`sockaddr_in`或`sockaddr_in6`）
-- `addrlen` ：地址结构体的字节大小，如`sizeof(sockaddr_in)`
+- `sockfd` ：通过 `socket()` 创建得到的 socket fd
+- `addr` ：指向本地地址结构体的指针（通常是 `sockaddr_in` 或 `sockaddr_in6`），Socketfd绑定这个地址
+- `addrlen` ：本地地址结构体的字节大小，如 `sizeof(sockaddr_in)`
 
-**IP 是“本地网卡的地址”**，比如：
+> 第二个参数要注意，参数指定的是 `struct sockaddr *` 类型，，一般不直接使用这个结构，这个类型在 Linux 上有许多的变种，比如 `sockaddr_in`(IPv4) ，在 bind 是强制转换成 `struct sockaddr *` 类型：
+
+**返回值**
+
+- 成功返回 0
+- 失败返回 -1，并设置 erron
+
+**IP 是 “本地网卡的地址”**，比如：
 
 - `127.0.0.1`：本机环回地址，仅本地访问
 - `0.0.0.0`：绑定到所有本地网卡地址
 - `192.168.1.100`：绑定到指定网卡的 IP
 
-**端口是“应用程序监听的编号”：**
+**端口 是 “应用程序监听的编号”：**
 
-- 一个端口对应一个网络服务（例如 80 是HTTP，22 是SSH）
+- 一个端口对应一个网络服务（例如 80 是 HTTP，22 是 SSH）
 - 如果不绑定端口，系统不知道哪个程序处理该服务
 
 
 
-对于服务端，必须通过`bind()`将socket绑定到特定的端口和地址，才能接受客户端连接。
+对于**服务端**，必须通过 `bind()` 将 socket 绑定到特定的 【IP: Port 组合】，才能接受客户端连接。
 
-当调用`bind()`，实际上是向操作系统注册这个`socket`，即 ”**这个socket以后负责处理发往 `IP: Port` 的数据**“
-
-| 概念    | 作用                                                      |
-| ------- | --------------------------------------------------------- |
-| IP 地址 | 指定“在哪块网卡”监听连接                                  |
-| 端口号  | 指定“监听哪个服务号”                                      |
-| bind()  | 将 socket 绑定到 IP:Port 组合上，告诉内核“我准备好监听了” |
+当调用 `bind()`，实际上是向操作系统注册这个 `socket`，即 ”**这个 socket 以后负责处理发往 `IP: Port` 的数据**“
 
 **示例**：
 
 假设你写了一个 Web 服务器，要监听 `127.0.0.1:8080`：
 
-- 创建socket
+- 创建 socket
 
   ~~~c++
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -1343,23 +1427,21 @@ int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
   ~~~c++
   sockaddr_in addr;
   addr.sin_family = AF_INET; 	// 地址族 IPv4
-  addr.sin_port = htons(8080);// 端口号
+  addr.sin_port = htons(8080);// 端口号（要转一下网络字节序）
   inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr); // ip：点分十进制 --> 网络二进制
   
   bind(sockfd, (sockaddr*)&addr, sizeof(addr));
   ~~~
 
-  此时系统就知道：这个socket负责监听 127.0.0.1:8080
+  此时系统就知道：这个 socket 负责监听 127.0.0.1:8080
 
   任何来自浏览器的 `http://127.0.0.1:8080` 请求，最终都会被这个 socket 接收。
 
 
 
+### listen()
 
-
-### ::listen()
-
- Linux 系统调用，用于将一个已绑定的 socket 转为**监听状态**，以便接收传入的 TCP 连接.
+ 服务端调用，用于将一个已绑定的 socket 转为 **监听状态**，以便接收传入的 TCP 连接.
 
 ~~~c++
 int listen(int sockfd, int backlog);
@@ -1367,9 +1449,9 @@ int listen(int sockfd, int backlog);
 
 **参数：**
 
-- `sockfd` ：已经绑定本地地址之后的sockfd
-- `backlog` ：未accept的连接请求最大数量
-  - 操作系统维护一个队列，用于存放已完成三次握手但尚未被accept的连接
+- `sockfd` ：已经绑定本地地址之后的服务端 sockfd
+- `backlog` ：未 accept 的连接请求最大数量
+  - 操作系统维护一个**队列**，用于存放已完成三次握手但尚未被 accept 的连接
   - 超过此数量，新的连接请求会被拒绝
 
 **返回值：**
@@ -1384,47 +1466,183 @@ int listen(int sockfd, int backlog);
 
 ~~~c++
 int sockfd = socket(AF_INET, SOCK_STREAM, 0); // 创建
-bind(sockfd, ...);                            // 绑定IP和端口
-listen(sockfd, 1024);                         // 开始监听
+bind(sockfd, ...);                            // 绑定 IP 和端口
+listen(sockfd, 1024);                         // 开始监听，最大连接数1024
 int connfd = accept(sockfd, ...);             // 接收连接
 ~~~
 
 
 
-### accept4()
 
-`accept4()` 是 Linux 系统调用，用于从监听套接字中**接受一个新连接**，是对传统 `accept()` 的增强版。
 
-它不仅接受连接，还能**直接为新连接设置属性**，比如非阻塞（`O_NONBLOCK`）和关闭继承（`O_CLOEXEC`）。
+### accept()
+
+服务端调用，`accept()` 用于从监听sockfd 中 **接受一个新连接**， `accept4()` 是对传统 `accept()` 的增强版。
+
+#### 传统 `accept()`
 
 ~~~c++
-int accept4(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
+#include <sys/types.h>   
+#include <sys/socket.h>
+
+/*
+ * sockfd: 已经创建的本地正在监听的 socket
+ * addr: 保存连接的客户端的地址信息
+ * addrlen: sockaddr 的长度指针
+ *
+ * return: 成功返回新连接的客户端的 socket fd；失败返回 -1，设置 erron
+ */
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 ~~~
 
-| 参数      | 说明                                                         |
-| --------- | ------------------------------------------------------------ |
-| `sockfd`  | 已经处于监听状态的套接字（通过 `listen()`）                  |
-| `addr`    | 接收客户端地址信息（可以为 `NULL`）                          |
-| `addrlen` | `addr` 对应的长度（输入输出参数）                            |
-| `flags`   | **额外设置的 socket 属性**，可选项如下：<br />- `SOCK_NONBLOCK`：设置返回的连接为非阻塞；<br />- `SOCK_CLOEXEC`：子进程不会继承这个 socket（避免资源泄露） |
+后两个参数我们需要定义，但是不需要初始化，在连接成功后客户端的 socket 信息会自动地填入第 3 个结构中。
 
-返回值
+示例：
 
-- 成功：返回新的连接 socket 文件描述符（`connfd`），用于与客户端通信；
-- 失败：返回 `-1`，并设置 `errno`。
+~~~c++
+struct sockaddr_in clientaddr;
+int clientaddr_len = sizeof(clientaddr);
 
-标志位flags
+// 建立连接请求
+int client_fd = accept(server_fd, (struct sockaddr *)&clientaddr, &clientaddr_len);
+if(client_fd == -1) {
+    perror("accept error") ;
+    exit(1) ;
+}
 
-| 标志            | 用途说明                             | 是否可被继承 | 替代方式（手动设置）             | 推荐用途                          |
-| --------------- | ------------------------------------ | ------------ | -------------------------------- | --------------------------------- |
-| `SOCK_NONBLOCK` | 设置 socket 为**非阻塞模式**         | ✅            | `fcntl(fd, F_SETFL, O_NONBLOCK)` | epoll / Reactor 模型              |
-| `SOCK_CLOEXEC`  | 在 `exec()` 时**自动关闭文件描述符** | ❌            | `fcntl(fd, F_SETFD, FD_CLOEXEC)` | 防止子进程继承 socket、提高安全性 |
+// socket fd 使用完毕也必须关闭
+close(client_fd);
+~~~
+
+
+
+#### `accept4()`  
+
+`accept4()`  不仅接受连接，还能 **直接为新连接设置属性**，比如非阻塞（`O_NONBLOCK`）和关闭继承（`O_CLOEXEC`）。
+
+~~~c++
+#include <sys/types.h>   
+#include <sys/socket.h>
+
+/*
+ * flags：额外设置的 socket 属性，可选项如下：
+ 		 SOCK_NONBLOCK：设置返回的连接为非阻塞；
+ 		 SOCK_CLOEXEC：子进程不会继承这个 socket（避免资源泄露）
+ 
+ * return: 成功返回新连接的客户端的 socket fd；失败返回 -1，设置 erron
+ */
+
+int accept4(int sockfd, struct sockaddr *addr, socklen_t * addrlen, int flags);
+~~~
+
+标志位 flags
+
+| 标志            | 用途说明                              | 是否可被继承 | 替代方式（手动设置）             | 推荐用途                          |
+| --------------- | ------------------------------------- | ------------ | -------------------------------- | --------------------------------- |
+| `SOCK_NONBLOCK` | 设置 socket 为 **非阻塞模式**         | ✅            | `fcntl(fd, F_SETFL, O_NONBLOCK)` | epoll / Reactor 模型              |
+| `SOCK_CLOEXEC`  | 在 `exec()` 时 **自动关闭文件描述符** | ❌            | `fcntl(fd, F_SETFD, FD_CLOEXEC)` | 防止子进程继承 socket、提高安全性 |
+
+
+
+
+
+### connect()
+
+客户端调用，`connect()` 用于向服务器发起连接请求。
+
+它告诉操作系统：“**我要连接到这个 IP + 端口，请帮我建立 TCP 连接**。”
+
+~~~C++
+#include <sys/socket.h>
+
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+// sockfd 通过 socket()创建的套接字描述符
+// addr   指向目标服务器地址结构（如 sockaddr_in）
+// addrlen 地址结构的大小
+
+// 返回值  成功返回 0，失败返回-1，并设置 error
+~~~
+
+
+
+
+
+### send() 、sendto()
+
+双方可调用，在建立连接之后，要发送数据，既然 socket 也是文件，发送数据其实也就是写文件，我们使用 send 函数来发送 socket 数据：
+
+~~~c++
+#include <sys/types.h>
+#include <sys/socket.h>
+
+/*
+ * sockfd: 接受数据的 socket
+ * buf: 发送的数据
+ * len: 数据长度
+ * flags: 当这个参数为 0，该函数等价与 write
+ * return: 成功返回发送的字节数，失败返回 -1，并设置 erron
+ */
+ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+
+/* sendto 功能是将数据发送到指定的地址 dest_addr，其他参数基本相同 */
+ssize_t sendto(int sockfd, const void *buf, size_t len, int flags,
+               const struct sockaddr *dest_addr, socklen_t addrlen);
+~~~
+
+例如服务器在建立连接后发送一个字符串到客户端：
+
+~~~c++
+char msg[] = "Hello Client."
+send(client_fd, msg, strlen(msg), 0);
+
+sendto(client_fd, msg, strlen(msg), 0,
+      (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+~~~
+
+
+
+### recv() 、recvfrom()
+
+双方可调用，用于接收数据，与 send 类似，recv 的功能也跟 read 几乎相同：
+
+```C++
+#include <sys/types.h>
+#include <sys/socket.h>
+
+/*
+ * sockfd: 接收的 socket fd
+ * buf: 接收缓冲区
+ * len: 缓冲区长度
+ * flags: 当这个参数为 0，该函数等价与 read
+ * return: 成功返回接受的字节数，失败返回 -1，并设置 erron
+ */
+ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+
+/* recvfrom 从指定的地址 src_addr 接收数据，其他参数与 recv 类似 */
+ssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,
+                 struct sockaddr *src_addr, socklen_t *addrlen);
+```
+
+例如接受服务器发送的字符串：
+
+~~~C++
+char msg_buf[100] = { 0 };
+recv(server_fd, msg_buf, 100, 0);
+
+int srcaddr_len = sizeof(src_addr);
+recvfrom(server_fd, msg_buf, 100, 0,
+        (struct sockaddr*)&src_addr, &srcaddr_len);
+~~~
+
+
+
+
 
 
 
 ### read()
 
-从文件描述符fd中读取count字节数据，读到用户提供的缓冲区buf中。
+从文件描述符 fd 中读取 count 字节数据，读到用户提供的缓冲区 buf 中。
 
 ~~~C++
 ssize_t read(int fd, void *buf, size_t count);
@@ -1437,14 +1655,14 @@ ssize_t read(int fd, void *buf, size_t count);
 返回值：
 
 - 成功返回实际读取的字节数
-- 失败返回-1，并设置`errno`
-- 读到EOF：返回0 （例如从文件末尾读）
+- 失败返回-1，并设置 `errno`
+- 读到 EOF：返回 0 （例如从文件末尾读）
 
 
 
 ### write()
 
-将数据写入文件描述符，通常用于向文件、socket、eventfd等对象传递数据。
+将数据写入文件描述符，通常用于向文件、socket、eventfd 等对象传递数据。
 
 ~~~C++
 ssize_t write(int fd, const void *buf, size_t count);
@@ -1457,7 +1675,7 @@ ssize_t write(int fd, const void *buf, size_t count);
 返回值：
 
 - 成功返回实际写入的字节数
-- 失败返回-1，并设置`errno`
+- 失败返回-1，并设置 `errno`
 
 特点：
 
@@ -1468,7 +1686,7 @@ ssize_t write(int fd, const void *buf, size_t count);
 
 ### close()
 
- Linux 中专门用于**关闭文件描述符fd的系统调用**，释放系统资源。头文件`<unistd.h>`
+ Linux 中专门用于 **关闭文件描述符 fd 的系统调用**，释放系统资源。头文件 `<unistd.h>`
 
 ~~~C++
 #include <unistd.h>
@@ -1476,10 +1694,10 @@ ssize_t write(int fd, const void *buf, size_t count);
 int close(int fd);
 ~~~
 
-**参数fd：**
+**参数 fd：**
 
 - 是一个非负整数，用来标识内核中打开的一个文件对象。
-- 不仅代表“文件”，也可以是普通文件、Socket、epoll实例等
+- 不仅代表“文件”，也可以是普通文件、Socket、epoll 实例等
 
 | fd 类型       | 说明                                        |
 | ------------- | ------------------------------------------- |
@@ -1506,22 +1724,22 @@ int close(int fd);
 ✅ 释放系统资源（文件表、内核对象）
 
 - 每个打开的文件/句柄都占用系统资源。
-- 若不及时关闭，可能导致**资源泄露**（特别是长运行的服务进程）。
+- 若不及时关闭，可能导致 **资源泄露**（特别是长运行的服务进程）。
 
 ✅ 标记文件描述符为可复用
 
 - 文件描述符是有限的（受限于 `ulimit -n`，通常默认是 1024）。
 - `close(fd)` 之后，操作系统可以复用该编号，避免句柄耗尽。
 
-✅ 对 epoll/fd/socket 等资源来说，是**必须的清理操作**
+✅ 对 epoll/fd/socket 等资源来说，是 **必须的清理操作**
 
 - 比如：若 `epollfd_` 没有关闭，内核中 epoll 实例会一直存在，即使程序已经不再使用。
 
 **`::close()`：**
 
-- 在 C++ 中，为了**避免与类中可能定义的 `close()` 成员函数发生冲突**，经常使用 `::close()` 显式表示
+- 在 C++ 中，为了 **避免与类中可能定义的 `close()` 成员函数发生冲突**，经常使用 `::close()` 显式表示
 
-- 调用的是**全局**命名空间下的 C 函数 `close()`，即 `unistd.h` 中的系统调用
+- 调用的是 **全局** 命名空间下的 C 函数 `close()`，即 `unistd.h` 中的系统调用
 
 
 
@@ -1531,17 +1749,17 @@ int close(int fd);
 
 ~~~c++
 #include <sys/socket.h>
-int setsockopt(int sockfd, 			// 创建的socket的fd
+int setsockopt(int sockfd, 			// 创建的 socket 的 fd
                int level, 			// 设置的协议层
                int optname,			// 具体的选项名称
                const void *optval, 	// 指向设置值的指针 通常是 int*
                socklen_t optlen);	// optval 所指数据的字节大小
 ~~~
 
-`level`协议层，常见取值有：
+`level` 协议层，常见取值有：
 
-- `SOL_SOCKET` 通用socket选项
-- `IPPROTO_TCP` TCP层选项
+- `SOL_SOCKET` 通用 socket 选项
+- `IPPROTO_TCP` TCP 层选项
 
 `optname` 选项名称，常见选项有：
 
@@ -1558,7 +1776,7 @@ int setsockopt(int sockfd, 			// 创建的socket的fd
 
 **应用场景举例：**
 
-- **Web服务器重启绑定端口失败？**
+- **Web 服务器重启绑定端口失败？**
   - 使用 `SO_REUSEADDR` 解决。
 
 - **多线程高并发接入同一端口？**
@@ -1573,16 +1791,16 @@ int setsockopt(int sockfd, 			// 创建的socket的fd
 **注意：**
 
 - 所有选项都应在绑定或监听之前设置
-- `TCP_NODELAY`仅适用于TCP socket，不适用于UDP
+- `TCP_NODELAY` 仅适用于 TCP socket，不适用于 UDP
 
 
 
 ### getSockname()
 
-`::getsockname()` 是一个 系统调用，用于获取一个已绑定 socket 的**本地地址信息**（IP + 端口）。
+`::getsockname()` 是一个 系统调用，用于获取一个已绑定 socket 的 **本地地址信息**（IP + 端口）。
 
 ~~~C++
-int getsockname(int sockfd, struct sockaddr* addr, socklen_t* addrlen);
+int getsockname(int sockfd, struct sockaddr * addr, socklen_t* addrlen);
 ~~~
 
 参数：
@@ -1597,112 +1815,137 @@ int getsockname(int sockfd, struct sockaddr* addr, socklen_t* addrlen);
 
 
 
-## 地址结构sockaddr
+## Socket 编程示例
 
-### sockaddr_in
-
-`sockaddr_in` 是 C/C++ socket 编程中用于**描述一个 IPv4 的通信地址（IP+端口）的结构体**。
-
-定义在 `<netinet/in.h>` 中。
-
-用于指定 **IP地址 + 端口号**，比如 `192.168.1.100:8080`。
-
-结构定义
+### 服务端
 
 ~~~C++
-struct sockaddr_in {
-    sa_family_t    sin_family;   // 地址族，必须是 AF_INET（IPv4）
-    in_port_t      sin_port;     // 端口号（网络字节序）
-    struct in_addr sin_addr;     // IP 地址（32 位，网络字节序）
-    char           sin_zero[8];  // 填充字段，保持与 sockaddr 结构体大小一致
-};
+#include <iostream>
+#include <cstring>
+#include <unistd.h>
+#include <arpa/inet.h>
+ 
+int main() {
+
+    // 创建 Socket
+    int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket == -1) {
+        std::cerr << "无法创建 Socket\n";
+        return 1;
+    }
+ 
+    // 把服务端用于通信的 IP + 端口 绑定到socket上
+    sockaddr_in server_addr{};                // 存放服务端IP和端口的数据结构
+    server_addr.sin_family = AF_INET;         // IPv4
+    server_addr.sin_addr.s_addr = INADDR_ANY; // IP 地址 监听所有网络接口（服务端任意网卡的IP都可以用于通讯）
+    server_addr.sin_port = htons(12345);      // 指定监听端口 12345
+ 
+    if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr))) {
+        std::cerr << "绑定失败\n";
+        close(server_socket);
+        return 1;
+    }
+ 
+    // Socket 开启监听 
+    if (listen(server_socket, 5) == -1) {
+        std::cerr << "监听失败\n";
+        close(server_socket);
+        return 1;
+    }
+ 
+    std::cout << "服务器正在监听端口 12345...\n"; // 监听到 127.0.0.1 : 12345 有新连接
+ 
+    // 接收客户端的连接请求  如果没有客户端连上来，accept()函数将阻塞等待
+    sockaddr_in client_addr{};
+    socklen_t client_addr_len = sizeof(client_addr);
+    int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+    if (client_socket == -1) {
+        std::cerr << "接受连接失败\n";
+        close(server_socket);
+        return 1;
+    }
+ 
+    std::cout << "客户端已连接\n";
+
+ 
+    // 接收客户端数据 存到 buffer
+    char buffer[1024];
+    int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+    if (bytes_received == -1) {
+        std::cerr << "接收数据失败\n";
+    } else {
+        buffer[bytes_received] = '\0';
+        std::cout << "收到数据: " << buffer << std::endl;
+    }
+ 
+    // 向客户端发送数据
+    const char* response = "你好，客户端！";
+    send(client_socket, response, strlen(response), 0);
+ 
+    // 关闭 Socket
+    close(client_socket);
+    close(server_socket);
+ 
+    return 0;
+}
 ~~~
 
-| 字段          | 类型                 | 作用             | 说明                                         |
-| ------------- | -------------------- | ---------------- | -------------------------------------------- |
-| `sin_family`  | `sa_family_t`        | 协议族           | 必须设置为 `AF_INET`，表示 IPv4              |
-| `sin_port`    | `in_port_t` (16-bit) | 端口号           | 需要使用 `htons()` 转为网络字节序（大端序）  |
-| `sin_addr`    | `struct in_addr`     | IPv4 地址        | 需要使用 `inet_addr()`、`inet_pton()` 等赋值 |
-| `sin_zero[8]` | 填充                 | 保持结构大小一致 | 一般用 `memset()` 将整个结构清零             |
 
-系统 socket API 使用的是泛型地址结构 `struct sockaddr`：
+
+### 客户端
 
 ~~~C++
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-~~~
+#include <iostream>
+#include <cstring>
+#include <unistd.h>
+#include <arpa/inet.h>
+ 
+int main() {
 
-很多 socket API 用的是 `struct sockaddr*`，这是为了兼容 IPv4/IPv6。
+    // 创建 Socket
+    int client_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_socket == -1) {
+        std::cerr << "无法创建 Socket\n";
+        return 1;
+    }
+ 
+    // 向服务器发起连接请求 127.0.0.1:12345
+    sockaddr_in server_addr{}; // 存放服务端IP和端口的结构体
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(12345);                    // 服务器端口
+    inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr); // 服务器 IP 地址
 
-`sockaddr_in` 是 `sockaddr` 的子类型，可通过类型转换使用：
-
-~~~C++
-connect(sockfd, (struct sockaddr*)&addr, sizeof(addr));
-~~~
-
-作用场景：
-
-- **服务器**：用 `bind()` 把 socket 和一个本地 IP+端口绑定
-- **客户端**：用 `connect()` 发起连接请求到目标 IP+端口
-
-`connect()`**用于客户端向服务器发起连接请求。**
-
-它告诉操作系统：“我要连接到这个 IP + 端口，请帮我建立 TCP 连接。”
-
-~~~C++
-#include <sys/socket.h>
-
-int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
-// sockfd 通过socket()创建的套接字描述符
-// addr   指向目标服务器地址结构（如sockaddr_in）
-// addrlen 地址结构的大小
-
-// 返回值  成功返回0，失败返回-1，并设置error
-~~~
-
-如果 `connect()` 成功，客户端就和服务器建立了 TCP 连接，可以用以下函数通信：
-
-- `send()` / `recv()`：发送和接收数据
-- `write()` / `read()`：写入/读取 socket
-- `close()`：关闭连接
-
-**sin_addr**
-
-~~~C++
-struct sockaddr_in {
-    sa_family_t    sin_family;  // 地址族
-    in_port_t      sin_port;    // 端口号
-    struct in_addr sin_addr;    // ⭐ IP 地址
-    ...
-};
-
-struct in_addr {
-    in_addr_t s_addr;           // ⭐⭐ 32位 IP 地址（uint32_t）
-};
+    if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr))) { // 请求连接 Socket 和 服务端
+        std::cerr << "连接服务器失败\n";
+        close(client_socket);
+        return 1;
+    }
+ 
+    std::cout << "已连接到服务器\n"; // 服务器接收连接，连接成功，可以收发数据了
+ 
+    // 发送数据
+    const char* message = "你好，服务器！";
+    send(client_socket, message, strlen(message), 0);
+ 
+    // 接收数据
+    char buffer[1024];
+    int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
+    if (bytes_received == -1) {
+        std::cerr << "接收数据失败\n";
+    } else {
+        buffer[bytes_received] = '\0';
+        std::cout << "收到数据: " << buffer << std::endl;
+    }
+ 
+    // 关闭 Socket
+    close(client_socket);
+ 
+    return 0;
+}
 ~~~
 
 
 
-### sockaddr
+运行结果
 
-`sockaddr` 是一个通用结构体，是 `bind()` 这样的系统调用所要求的接口；
-
-`sockaddr_in` 是一个具体结构体，包含 IPv4 地址、端口等；是`sockaddr`的子类型
-
-~~~c++
-// 通用地址结构体
-struct sockaddr {
- sa_family_t sa_family;  // 地址族，比如 AF_INET
- char        sa_data[14]; // 原始地址数据（IP + 端口）
-};
-
-// IPv4 地址结构体
-struct sockaddr_in {
- sa_family_t    sin_family;  // 地址族（AF_INET）
- uint16_t       sin_port;    // 端口（网络字节序）
- struct in_addr sin_addr;    // IP地址
- char           sin_zero[8]; // 填充字节
-};
-~~~
-
-可以理解为：`sockaddr_in` 是 `sockaddr` 的“特化形式”，专门用于 IPv4。
-
+![image-20250823001740489](./pic/image-20250823001740489.png)

@@ -604,7 +604,7 @@ public:
 
 
 
-
+# 912 
 
 
 
@@ -858,7 +858,222 @@ public:
 
 
 
-# 200
+
+
+# 200 [岛屿数量](https://leetcode.cn/problems/number-of-islands/description/)
+
+@图 @dfs @ bfs
+
+![image-20250825232030133](./pic/image-20250825232030133.png)
+
+<img src="./pic/image-20250825233129525.png" alt="image-20250825233129525" style="zoom:50%;" />
+
+本题思路：**遇到一个没有遍历过的陆地，计数器就加一**，然后把**该节点陆地所能遍历到的陆地都标记**上。
+
+在遇到标记过的陆地节点和海洋节点的时候直接跳过。 这样**计数器就是最终岛屿的数量**。
+
+
+
+## 深搜dfs
+
+**`result` 作为岛屿计数器。遍历`grid`每个节点：每个未标记新陆地都是新岛屿起点**
+
+- 遇到新的未标记陆地，先标记`visited`，然后计数`result + 1`，表示遇到了新岛屿的起始点
+
+- dfs 主要用来标记这块新岛屿能连接上的所有陆地 `visited[][]`，走完这一层dfs，也就标记完了这块岛屿
+
+- 这样在下一轮，再遇到新的未标记陆地，又可以作为新岛屿的起始，`result + 1`
+
+~~~C++
+class Solution {
+public:
+    int dir[4][2] = {0,1, 1,0, -1,0, 0,-1}; // 四个方向
+
+    void dfs(vector<vector<char>>& grid, vector<vector<bool>>& visited, int x, int y)
+    {
+        // {x, y} 当前节点的坐标，第x行，第y列
+        
+        // 遍历当前节点{x, y}的四个方向
+        for (int i = 0; i < 4; i++)
+        {
+            int nextx = x + dir[i][0];
+            int nexty = y + dir[i][1];
+
+            if (nextx < 0 || nextx >= grid.size() ||
+                nexty < 0 || nexty >= grid[0].size())
+            {
+                continue; // 超出界限，直接跳过
+            }
+
+            // 是陆地且没被访问过
+            if (!visited[nextx][nexty] && grid[nextx][nexty] == '1') 
+            {
+                visited[nextx][nexty] = true;
+                dfs(grid, visited, nextx, nexty); // 递归
+            }
+
+        }
+    }
+
+    int numIslands(vector<vector<char>>& grid) {
+        int n = grid.size();   // n行
+        int m = grid[0].size();// m列
+
+        vector<vector<bool>> visited(n, vector<bool>(m, false)); // 标记是否访问过
+
+        int result = 0;
+        // result记录遇到的符合的新岛屿的个数，dfs用来标记这块岛屿能连接上的所有陆地
+        
+        // 遍历grid每个节点，每个未标记陆地都是新岛屿起始点
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                if (!visited[i][j] && grid[i][j] == '1')
+                {
+                    visited[i][j] = true;
+                    result++; // 遇到新岛屿起始点[i, j]，岛屿数量+1
+
+                    dfs(grid, visited, i, j); // 将与 [i, j] 连接上的陆地都标记上
+                }
+            }
+        }
+
+        return result;
+    }
+    
+};
+~~~
+
+上面的终止条件就写在了 调用dfs的地方，如果遇到不合法的方向，直接不会去调用dfs。
+
+也可以明确在dfs开头写上终止条件
+
+~~~C++
+void dfs(vector<vector<char>>& grid, vector<vector<bool>>& visited, int x, int y)
+{
+    // 终止：节点访问过，或者是海水
+    if (visited[x][y] || grid[x][y] == '0') return; 
+
+    visited[x][y] = true; // 标记     
+
+    for (int i = 0; i < 4; i++)
+    {
+        int nextx = x + dir[i][0];
+        int nexty = y + dir[i][1];
+
+        if (nextx < 0 || nextx >= grid.size() ||
+            nexty < 0 || nexty >= grid[0].size())
+        {
+            continue; 
+        }
+
+        dfs(grid, visited, nextx, nexty); // 判断条件放到前面去了，这里直接递归
+    }
+}
+~~~
+
+版本一中 调用dfs 的条件，放在了 版本二 的 终止条件位置上。
+
+版本一的写法是 ：下一个节点是否能合法已经判断完了，只要调用dfs就是可以合法的节点。
+
+版本二的写法是：不管节点是否合法，上来就dfs，然后在终止条件的地方进行判断，不合法再return。
+
+理论上来讲，版本一的效率更高一些，因为避免了 没有意义的递归调用，在调用dfs之前，就做合法性判断。 但从写法来说，可能版本二 更利于理解一些。（不过其实都差不太多）
+
+
+
+
+
+
+
+## 广搜bfs
+
+**dfs 换成 bfs，queue存放走过的节点坐标**
+
+- 遇到新的未标记陆地，就是新的岛屿，直接计数`result + 1`
+
+- 进入 bfs 标记这块新岛屿能连接上的所有陆地 `visited[][]`
+  - 取出que中节点，标记4个方向，符合的陆地节点**加入队列，代表走过，需要标记**（而不是从队列拿出来的时候再去标记走过），循环这个过程，直到que中没有节点（当前这块岛屿标记完成）
+- 再遍历遇到新的未标记陆地，再 `result + 1`，再bfs标记这块新岛屿
+
+
+
+~~~C++
+class Solution {
+public:
+    int dir[4][2] = {0,1, 1,0, -1,0, 0,-1}; // 四个方向
+
+    void bfs(vector<vector<char>>& grid, vector<vector<bool>>& visited, int x, int y)
+    {
+        queue<pair<int, int>> que; // 存放已经走过的坐标 {x, y}
+        que.push({x, y});
+
+        visited[x][y] = true; // 只要加入队列，就标记
+
+        while (!que.empty())
+        {
+            pair<int, int> cur = que.front();
+            que.pop();
+
+            int curx = cur.first;
+            int cury = cur.second;
+
+            // 处理cur的4个方向
+            for (int i = 0; i < 4; i++)
+            {
+                int nextx = curx + dir[i][0];
+                int nexty = cury + dir[i][1];
+                if (nextx < 0 || nextx >= grid.size() ||
+                    nexty < 0 || nexty >= grid[0].size())
+                {
+                    continue;
+                }
+
+                if (!visited[nextx][nexty] && grid[nextx][nexty] == '1')
+                {
+                    que.push({nextx, nexty});     // 加入队列
+                    visited[nextx][nexty] = true; // 标记
+                }
+            }
+        }
+    }
+
+    int numIslands(vector<vector<char>>& grid) {
+        int n = grid.size();   // n行
+        int m = grid[0].size();// m列
+
+        vector<vector<bool>> visited(n, vector<bool>(m, false)); // 标记是否访问过
+
+        int result = 0; // result记录遇到的符合的新岛屿的个数
+        
+        // 换成 bfs 来标记这块岛屿能连接上的所有陆地
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < m; j++)
+            {
+                if (!visited[i][j] && grid[i][j] == '1')
+                {
+                    result++; // 遇到新岛屿起始点[i, j]，岛屿数量+1
+                    bfs(grid, visited, i, j); // 将与 [i, j] 连接上的陆地都标记上
+                }
+            }
+        }
+
+        return result;       
+    }
+};
+~~~
+
+
+
+**注意：标记的时机**
+
+如果从队列拿出节点，再去标记这个节点走过，就会发生下图所示的结果，会导致很多节点重复加入队列。
+
+![image-20250826160550820](./pic/image-20250826160550820.png)
+
+
 
 
 
@@ -922,13 +1137,73 @@ public:
 
 
 
+# 20 [有效的括号](https://leetcode.cn/problems/valid-parentheses/description/?envType=study-plan-v2&envId=top-100-liked)
+
+@ 栈
+
+![image-20250725112258499](pic/image-20250725112258499.png)
+
+> **注意看给的示例，题目描述不清楚**
+>
+> **必须是 “ ( [ { } ] )  [ ] ” 这种成对的顺序，不能交叉放不同类型的括号  “ [ ( ] ) ”**
+
+**栈来存储字符串s里的括号：**
+
+遍历s
+
+- 根据s里的左括号，往栈里放对应的右括号；
+
+- 遇到s里的右括号，能对应上栈顶元素，就弹出栈顶
+
+<img src="pic/image-20250725110437842.png" alt="image-20250725110437842" style="zoom:33%;" />
+
+不匹配的情况：
+
+- 左括号多余 —— 遍历完字符串，但是栈不为空
+- 括号不匹配 —— 发现栈里没有要匹配的字符
+- 右括号多余 —— 遍历字符串匹配的过程中，栈已经为空了
+
+匹配的表现：
+
+- **字符串遍历完，栈也是空的**
 
 
 
+~~~C++
+class Solution {
+public:
+    bool isValid(string s) {
 
+        if (s.size() % 2 != 0)  return false; // 如果 s 的长度是奇数，一定不匹配
 
+        stack<char> st; // 根据 s 的左括号，放入相应的右括号
+        
+        // 三种情况：
+        // 1 左括号多余 -- s遍历完，栈不为空
+        // 2 括号不匹配 -- s遍历过程中，栈顶括号不匹配
+        // 3 右括号多余 -- s遍历过程中，栈已经空
 
-# 20
+        for (int i = 0; i < s.size(); i++)
+        {
+            // 根据 s 里的左括号，往栈里加入对应的右括号
+            if (s[i] == '(')        st.push(')');
+            else if (s[i] == '[')   st.push(']');
+            else if (s[i] == '{')   st.push('}');
+
+            // 第3种 和 第2种 情况，直接false （注意if里顺序不能换）
+            else if (st.empty() || st.top() != s[i])    return false; 
+
+            // st.top() == s[i] 遍历到对应的右括号就弹出栈顶
+            else    st.pop();
+        }
+
+        // 第1种 情况，遍历完s，但栈不为空，这里就返回false
+        // 如果为空，说明符合要求，返回的是true
+        return st.empty();
+        
+    }
+};
+~~~
 
 
 
@@ -944,7 +1219,7 @@ public:
 
 ![image-20250724104534791](pic/image-20250724104534791.png)
 
-### 贪心
+## 贪心
 
 ![image-20250724105610766](pic/image-20250724105610766.png)
 
@@ -1006,7 +1281,7 @@ int main()
 
 
 
-### 动规
+## 动规
 
 ![image-20250821220151456](./pic/image-20250821220151456.png)
 
@@ -1070,6 +1345,61 @@ public:
 # 236
 
 
+
+
+
+# 92 
+
+
+
+
+
+# 141 
+
+
+
+
+
+
+
+# 300 [最长递增子序列](https://leetcode.cn/problems/longest-increasing-subsequence/description/)
+
+@动规 @子序列
+
+![image-20250824204332038](./pic/image-20250824204332038.png)
+
+![](./pic/image-20250824211810584.png)
+
+![image-20250824211912319](./pic/image-20250824211912319.png)
+
+
+
+~~~C++
+class Solution {
+public:
+    int lengthOfLIS(vector<int>& nums) {
+
+        if (nums.size() <= 1)   return nums.size();
+
+        // dp[i] - nums中，以nums[i]结尾的最长递增子序列的长度
+        vector<int> dp(nums.size(), 1);
+
+        int result = 0;
+        for (int i = 1; i < nums.size(); i++) // 以nums[i]结尾
+        {
+            for (int j = 0; j < i; j++) // j 从 0 到 i-1
+            {
+                if(nums[i] > nums[j])   dp[i] = max(dp[i], dp[j] + 1);
+            }
+
+            if (dp[i] > result) result = dp[i]; // 取dp最大值
+                                                // 注意最大值不一定是dp[最后一个]
+        }
+
+        return result;
+    }
+};
+~~~
 
 
 
