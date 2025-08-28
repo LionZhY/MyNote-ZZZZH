@@ -411,532 +411,6 @@ muduo 项目采用主从 **多 Reactor 多线程** 模型
 
 
 
-# epoll ⭐
-
-`epoll` 是 Linux 内核提供的高效 I/O 事件通知机制，用于处理大量并发连接。
-
-- **注册监听事件**（如可读、可写）
-- **等待事件发生**（阻塞或非阻塞方式）
-- **获取就绪的文件描述符**（仅返回有事件的，不需要遍历全部）
-
-它的核心作用是 **监听多个文件描述符（如套接字）是否有事件发生，并高效返回就绪的文件描述符**，避免了传统 `select/poll` 方式的低效轮询。
-
-就像一个 **智能消息通知系统**，你告诉它要关注哪些文件（比如网络连接），它会在这些文件有变化（比如数据可读）时 **只通知你有变化的那些**，而不是让你一个个去检查。这样能 **高效处理大量并发连接**，比如服务器同时和成千上万的客户端通信。
-
-
-
-## select
-
-**`select`** 也是 Linux 提供的 **I/O 多路复用** 机制，用于同时监听多个文件描述符的事件（如可读、可写）。它的主要特点是：
-
-- 使用 `fd_set` 位图存储文件描述符，需要手动设置和检查每个文件描述符的状态。
-- 最大支持 1024/2048 个文件描述符（具体取决于系统）。
-- 每次调用 `select` 都要重新填充 `fd_set` 并遍历整个列表，即使只有少数文件描述符有事件，效率低。
-
-**select 的缺点**
-
-- 单个进程能够监视的文件描述符的数量存在最大限制，通常是 1024，当然可以更改数量，但由于 select 采用轮询的方式扫描文件描述符，文件描述符数量越多，性能越差；在 linux 内核头文件中，有这样的定义：#define __FD_SETSIZE 1024
-
-- 内核 / 用户空间内存拷贝问题，select 需要复制大量的句柄数据结构，产生巨大的开销
-- select 返回的是含有整个句柄的数组，应用程序需要遍历整个数组才能发现哪些句柄发生了事件
-- select 的触发方式是水平触发，应用程序如果没有完成对一个已经就绪的文件描述符进行 IO 操作，那么之后每次 select 调用还是会将这些文件描述符通知进程
-
-相比 select 模型，**poll 使用链表保存文件描述符，因此没有了监视文件数量的限制**，但其他三个缺点依然存在。
-
-**epoll 的实现机制与 select/poll 机制完全不同，它们的缺点在 epoll 上不复存在。**
-
-
-
-## Epoll 的原理及优势
-
-
-
-## sys/epoll.h
-
-该头文件定义了 Linux 下 **epoll 的核心接口和数据结构**，是高性能 I/O 多路复用的重要基础设施之一。
-
-~~~C++
-/* Copyright (C) 2002-2022 Free Software Foundation, Inc.
-   This file is part of the GNU C Library.
-
-   The GNU C Library is free software; you can redistribute it and/or
-   modify it under the terms of the GNU Lesser General Public
-   License as published by the Free Software Foundation; either
-   version 2.1 of the License, or (at your option) any later version.
-
-   The GNU C Library is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Lesser General Public License for more details.
-
-   You should have received a copy of the GNU Lesser General Public
-   License along with the GNU C Library; if not, see
-   <https://www.gnu.org/licenses/>.  */
-
-#ifndef	_SYS_EPOLL_H
-#define	_SYS_EPOLL_H	1  // 防止头文件被重复包含
-
-#include <stdint.h>		// 提供 uint32_t、uint64_t 等固定宽度整数类型
-#include <sys/types.h>	// 提供 size_t、pid_t 等通用类型
-
-#include <bits/types/sigset_t.h>		// 信号掩码类型定义
-#include <bits/types/struct_timespec.h> // timespec 结构体定义，用于高精度时间
-
-/* Get the platform-dependent flags.  */
-#include <bits/epoll.h> // 平台相关的 epoll 常量和实现定义
-
-/* 数据结构打包宏 */
-#ifndef __EPOLL_PACKED	// 条件定义 __ EPOLL_PACKED，可用于结构体内存对齐优化（目前未具体实现）
-# define __EPOLL_PACKED
-#endif
-
-
-/* EPOLL 事件常量枚举 */
-// 这些常量是 epoll_event.events 中使用的位掩码，用于标识感兴趣的 I/O 事件
-enum EPOLL_EVENTS
-  {
-    EPOLLIN = 0x001,	 // 有数据可读
-#define EPOLLIN EPOLLIN
-    EPOLLPRI = 0x002,	 // 有紧急数据可读
-#define EPOLLPRI EPOLLPRI
-    EPOLLOUT = 0x004,	 // 有数据可写
-#define EPOLLOUT EPOLLOUT
-    EPOLLRDNORM = 0x040, // 普通可读数据（与 EPOLLIN 重合）
-#define EPOLLRDNORM EPOLLRDNORM
-    EPOLLRDBAND = 0x080, // 优先级带可读数据
-#define EPOLLRDBAND EPOLLRDBAND
-    EPOLLWRNORM = 0x100, // 普通可写数据
-#define EPOLLWRNORM EPOLLWRNORM
-    EPOLLWRBAND = 0x200, // 优先级带可写数据
-#define EPOLLWRBAND EPOLLWRBAND
-    EPOLLMSG = 0x400,	 // 保留位，未被使用
-#define EPOLLMSG EPOLLMSG
-    EPOLLERR = 0x008,	 // 出错事件（读写都会触发）
-#define EPOLLERR EPOLLERR
-    EPOLLHUP = 0x010,	// 对端关闭连接（挂起）
-#define EPOLLHUP EPOLLHUP
-    EPOLLRDHUP = 0x2000,// 对端关闭了读操作
-#define EPOLLRDHUP EPOLLRDHUP
-    EPOLLEXCLUSIVE = 1u << 28,	// 仅用于 epoll 实现的锁优化（不能用户级设置）
-#define EPOLLEXCLUSIVE EPOLLEXCLUSIVE
-    EPOLLWAKEUP = 1u << 29,		// 防止系统挂起（需要 CAP_BLOCK_SUSPEND 权限）
-#define EPOLLWAKEUP EPOLLWAKEUP
-    EPOLLONESHOT = 1u << 30,	// 一次触发事件后必须重新注册
-#define EPOLLONESHOT EPOLLONESHOT
-    EPOLLET = 1u << 31			// 边沿触发，高性能但复杂
-#define EPOLLET EPOLLET
-  };
-
-
-/**
-* epoll_ctl 是用于控制 epoll 实例的系统调用
-* 其操作码（operation code）用于指定你想对 epoll 实例执行的操作
-*/
-
-/* Valid opcodes ( "op" parameter ) to issue to epoll_ctl(). epoll_ctl 操作码 */
-// 注册新的 fd 到 epoll 实例
-#define EPOLL_CTL_ADD 1	/* Add a file descriptor to the interface.  */
-// 从 epoll 实例移除 fd
-#define EPOLL_CTL_DEL 2	/* Remove a file descriptor from the interface.  */
-// 修改 fd 的监听事件
-#define EPOLL_CTL_MOD 3	/* Change file descriptor epoll_event structure.  */
-
-
-// 用户自定义数据，用于 epoll 事件附带的数据，用户可自由使用
-typedef union epoll_data
-{
-  void *ptr;	
-  int fd;		
-  uint32_t u32;
-  uint64_t u64;
-} epoll_data_t;
-
-
-// 核心事件结构体，用户在调用 epoll_ctl 和 epoll_wait 是传入或接收该结构体
-struct epoll_event
-{
-  uint32_t events;	/* Epoll events 事件掩码（EPOLLIN 等）*/
-  epoll_data_t data;	/* User data variable 用户数据*/
-} __EPOLL_PACKED;
-
-
-__BEGIN_DECLS // C 语言兼容标记，用于兼容 C++，声明 extern "C"
-
-
-// 创建 epoll 实例
-/* Creates an epoll instance.  Returns an fd for the new instance.
-   The "size" parameter is a hint specifying the number of file
-   descriptors to be associated with the new instance.  The fd
-   returned by epoll_create() should be closed with close().  */
-extern int epoll_create (int __size) __ THROW;
-
-// 创建带标志位的 epoll 实例
-/* Same as epoll_create but with an FLAGS parameter.  The unused SIZE
-   parameter has been dropped.  */
-extern int epoll_create1 (int __flags) __ THROW;
-
-
-// 注册/删除/修改 epoll 事件
-/* Manipulate an epoll instance "epfd". Returns 0 in case of success,
-   -1 in case of error ( the "errno" variable will contain the
-   specific error code ) The "op" parameter is one of the EPOLL_CTL_*
-   constants defined above. The "fd" parameter is the target of the
-   operation. The "event" parameter describes which events the caller
-   is interested in and any associated user data.  */
-extern int epoll_ctl (
-    int __epfd, 
-    int __op, 
-    int __fd,	      
-    struct epoll_event *__event
-) __THROW;
-
-
-/* Wait for events on an epoll instance "epfd". Returns the number of
-   triggered events returned in "events" buffer. Or -1 in case of
-   error with the "errno" variable set to the specific error code. The
-   "events" parameter is a buffer that will contain triggered
-   events. The "maxevents" is the maximum number of events to be
-   returned ( usually size of "events" ). The "timeout" parameter
-   specifies the maximum wait time in milliseconds (-1 == infinite).
-
-   This function is a cancellation point and therefore not marked with
-   __THROW.  */
-extern int epoll_wait (
-    int __epfd, 
-    struct epoll_event *__events,
-    int __maxevents, 
-    int __timeout
-);
-
-
-/* Same as epoll_wait, but the thread's signal mask is temporarily
-   and atomically replaced with the one provided as parameter.
-
-   This function is a cancellation point and therefore not marked with
-   __THROW.  */
-extern int epoll_pwait (int __epfd, struct epoll_event *__events,
-			int __maxevents, int __ timeout,
-			const __sigset_t *__ss);
-
-/* Same as epoll_pwait, but the timeout as a timespec.
-
-   This function is a cancellation point and therefore not marked with
-   __THROW.  */
-#ifndef __USE_TIME_BITS64
-extern int epoll_pwait2 (int __epfd, struct epoll_event *__events,
-			 int __maxevents, const struct timespec *__timeout,
-			 const __sigset_t *__ss);
-#else
-# ifdef __REDIRECT
-extern int __REDIRECT (epoll_pwait2, (int __ epfd, struct epoll_event *__ev,
-				      int __maxevs,
-				      const struct timespec *__timeout,
-				      const __sigset_t *__ss),
-		       __epoll_pwait2_time64);
-# else
-#  define epoll_pwait2 __epoll_pwait2_time64
-# endif
-#endif
-
-__END_DECLS
-
-#endif /* sys/epoll.h */
-
-~~~
-
-
-
-### epoll_event
-
-~~~C++
-// 用户自定义数据，用于 epoll 事件附带的数据，用户可自由使用 
-typedef union epoll_data
-{
-  void *ptr;	// 用户可以传入一个指针，用来在回调时识别来源	
-  int fd;		
-  uint32_t u32; 
-  uint64_t u64;
-} epoll_data_t;
-~~~
-
-`epoll_data` 是一个 C 语言联合体，用于存放用户自定义的信息，这个信息会随着事件一起返回。
-
-epoll 不关心你到底存了什么，它只是“**帮你带回来**”
-
-epoll_wait 返回事件时，你就可以从 `epoll_event.data` 中拿到之前存的数据，来判断“是哪个 fd 触发的”或“这个 fd 对应哪个连接”等信息。
-
-~~~C++
-// epoll 核心事件结构体，用户在调用 epoll_ctl 和 epoll_wait 是传入或接收该结构体
-struct epoll_event
-{
-  uint32_t events;	 // 关心的事件
-  epoll_data_t data; // 用户数据，可以传一个 fd、指针等，epoll_wait 会返回它
-} __EPOLL_PACKED;
-~~~
-
-`events` 支持的宏（掩码）常用的如下：
-
-- `EPOLLIN`：可读
-- `EPOLLOUT`：可写
-- `EPOLLET`：边缘触发
-- `EPOLLONESHOT`：只触发一次
-- `EPOLLHUP`：挂起
-- `EPOLLERR`：错误
-
-**用到的事件类型 `EPOLLIN`、`EPOLLPRI`、`EPOLLOUT`**
-
-这些宏定义来自 `<sys/epoll.h>`，用于表示 **内核态监听文件描述符（fd）上发生的事件类型**。
-
-~~~C++
-// epoll.h 中
-enum EPOLL_EVENTS
-  {
-    EPOLLIN = 0x001,		// 0000 0001
-#define EPOLLIN EPOLLIN		// 对应的 fd 上有数据可读（包括对端关闭的情况）
-    
-    EPOLLPRI = 0x002,		// 0000 0010
-#define EPOLLPRI EPOLLPRI	// 对应的 fd 有紧急数据可读（带外数据）一般用于 TCP 的紧急数据（少见）
-    
-    EPOLLOUT = 0x004,		// 0000 0100
-#define EPOLLOUT EPOLLOUT	// 对应的 fd 可以进行 非阻塞写操作
-    ...
-	}
-~~~
-
-| 宏常量     | 十六进制值 | 意义             | 用途                         |
-| ---------- | ---------- | ---------------- | ---------------------------- |
-| `EPOLLIN`  | `0x001`    | 有数据可读       | TCP 收数据、accept 新连接    |
-| `EPOLLPRI` | `0x002`    | 有紧急数据可读   | 带外数据（OOB），较少用      |
-| `EPOLLOUT` | `0x004`    | 可写入（不阻塞） | 发送数据、非阻塞连接建立完成 |
-
-
-
-### epoll 生命周期
-
-~~~C++
-1. 创建 epoll 实例
-   ┌─────────────────────────────┐
-   │ epollfd = epoll_create1()   │  → 创建成功后返回一个 epoll 实例的 fd
-   └─────────────────────────────┘
-
-2. 注册 / 修改 / 删除感兴趣的事件（对应的 fd）
-   ┌────────────────────────────────────────────────────────────────┐
-   │ epoll_ctl(epollfd, EPOLL_CTL_ADD / MOD / DEL, fd, &event)      │
-   └────────────────────────────────────────────────────────────────┘
-
-3. 等待事件（阻塞/非阻塞）
-   ┌────────────────────────────────────────────────────────────┐
-   │ int n = epoll_wait(epollfd, events, maxEvents, timeoutMs); │
-   └────────────────────────────────────────────────────────────┘
-     - `events` 是 epoll_event 的数组
-     - `n` 表示有多少事件发生了，需遍历处理
-
-4. 关闭 epoll 实例（资源释放）
-   ┌──────────────────────┐
-   │ close(epollfd)       │
-   └──────────────────────┘
-~~~
-
-
-
-### epoll_create1() 创建 epoll 实例
-
-`epoll_create1` 是 Linux 下用于 **创建一个 epoll 实例** 的系统调用。该实例可以用于异步监听多个文件描述符（如 socket）的读写事件。
-
-创建成功后，**返回一个指向该 epoll 实例的 文件描述符（fd）**，后续操作（如 `epoll_ctl`、`epoll_wait`）都基于这个 fd。
-
-~~~C++
-#include <sys/epoll.h>
-
-int epoll_create1(int flags); //flags 是控制 epoll 实例行为的标志位，常用值为 EPOLL_CLOEXEC
-~~~
-
-**参数 `flags`** ：
-
-- 控制 epoll 实例行为的标志位
-
-- 常见的 `flags`：
-
-  - `EPOLL_CLOEXEC` ：设置 close-on-exec 标志，当调用 `exec()` 系列函数时，该 fd 会自动关闭，防止 fd 泄漏到子进程中
-
-  - 如果不需要特殊行为，可以传 `0`
-
-**返回值：**
-
-- `>=0`  创建成功，返回 epoll 实例的 fd
-- `<0`   创建失败，返回 `-1` ，并设置 `errno` 错误码
-
-**常见错误码 `errno`：**
-
-| errno 值 | 含义                       |
-| -------- | -------------------------- |
-| `EINVAL` | 传入的 flag 不合法         |
-| `EMFILE` | 进程已打开文件数达上限     |
-| `ENFILE` | 系统级文件描述符总数达上限 |
-| `ENOMEM` | 内存不足，无法分配资源     |
-
- **与旧接口 `epoll_create` 的区别：**
-
-| 特性    | `epoll_create`         | `epoll_create1`          |
-| ------- | ---------------------- | ------------------------ |
-| 参数    | 需要指定容量（被忽略） | 使用 `flags`             |
-| CLOEXEC | 需要手动设置（fcntl）  | 支持内建 `EPOLL_CLOEXEC` |
-| 推荐性  | 已弃用（glibc 说明）   | ✅ 建议优先使用           |
-
-
-
-**epoll_create() 创建 epoll 实例（已经不推荐使用了）**
-
-创建一个 epoll 实例，创建成功会返回一个文件描述符（epfd）。
-
-~~~C++
-#include <sys/epoll.h>
-
-int epoll_create(int size);
-~~~
-
-该 epoll 实例内部维护一个“红黑树”（用于注册 fd）和一个“就绪链表”（用于返回事件）。这些细节由内核管理。
-
-参数 `size`：**早期内核的提示参数**，用于指定将要监视的最大文件描述符数量的“建议值”。
-
-局限：
-
-- 参数 `size` 被忽略，容易误导开发者。
-- 不支持设置 epoll 实例的行为（如 `EPOLL_CLOEXEC`）。
-
-
-
-### epoll_ctl() 添加/修改/删除 fd
-
-对 epoll 实例添加/修改/删除监听的 fd。
-
-> 在内核中，使用红黑树存储 fd → event 的映射关系，实现高效查找和修改。就绪事件存在一个链表中。
-
-~~~C++
-#include <sys/epoll.h>
-
-int epoll_ctl(int epfd, 
-              int op,  // 操作类型 add/del/mod
-              int fd, 
-              struct epoll_event *event);
-~~~
-
-**参数：**
-
-- `epfd`   由 `epoll_create1` 返回的 epoll 文件描述符
-
-- `op` 操作类型（操作码）
-
-  ~~~C++
-  #define EPOLL_CTL_ADD 1 // 注册新的 fd 到 epoll 实例
-  #define EPOLL_CTL_DEL 2	// 从 epoll 实例移除 fd
-  #define EPOLL_CTL_MOD 3 // 修改 fd 的监听事件
-  ~~~
-
-- `fd`  目标文件描述符
-
-- `event`  关注的事件集和附加数据（如 `data.ptr`）
-
-> `epfd` 是通过 `epoll_create()` 或 `epoll_create1()` 返回的 **文件描述符**，它就像其他的 `fd`（如 socket、文件）一样，是一个整数，但这个整数只是一个索引，**指向内核空间中的一个 epoll 实例结构体**。
->
-> 调用 `epoll_ctl(epfd, EPOLL_CTL_ADD, fd, ...)` 时，内核会根据 `epfd` 定位对应的 epoll 实例对象，并将该 `fd` 添加到它的内部结构中。
->
-> 一个 `epfd` 可以管理 多个 `fd`
-
-**返回值：**
-
-- 成功返回 0，失败返回 -1
-
-错误码（部分）：
-
-- `EBADF`：`epfd` 或 `fd` 非法
-- `EEXIST`：重复添加
-
-- `ENOENT`：修改或删除了未注册的 fd
-
-- `EINVAL`：事件非法或操作错误
-
-
-
-### epoll_wait() 等待事件
-
-等待 epoll 实例中发生的 I/O 事件。将发生的事件存入 `events` 数组，返回发生事件数量。
-
-~~~C++
-int epoll_wait(int epfd, 
-               struct epoll_event *events,
-               int maxevents, 
-               int timeout);
-~~~
-
-> 将就绪事件从就绪链表（rdlist）复制到用户传入的 `events` 缓冲区。
->
-> 如果没有事件，根据 `timeout` 阻塞/轮询。
->
-> 在内核中，使用 `poll_schedule_timeout` 等函数处理等待逻辑
-
-**参数：**
-
-- `epfd`：epoll 实例文件描述符
-- `events`：输出数组，保存发生的事件 （指向 `epoll_event` 的数组首地址指针）
-- `maxevents`：`events` 数组大小（> 0）
-- `timeout`：等待时间
-  - `-1`：无限等待
-  - `0`：立即返回
-  - `> 0`：等待的毫秒数
-
-**返回值：**
-
-- 成功：返回事件数量（0 表示超时）
-- 失败：返回 -1，设置 `errno`
-
-**错误码：**
-
-- `EINTR`：被信号打断
-- `EINVAL`：参数非法
-
-
-
-### close() 关闭 epoll 实例
-
-[`close()`](#close())用于 **关闭一个打开的文件描述符**，释放与之相关的所有内核资源。头文件 `<unistd.h>`
-
-~~~C++
-#include <unistd.h>
-int close(int fd);
-~~~
-
-**参数：**
-
-- `fd` 要关闭的文件描述符
-
-**返回值：**
-
-- 成功返回 0
-- 失败返回 -1 ，并设置 `errno`，常见错误：
-  - `EBADF`：传入的 `fd` 无效，可能已关闭或未打开
-  - `EINTR`：被信号中断
-
-在 epoll 相关上下文中，例如：
-
-- 关闭通过 `epoll_create1()` 创建的 epoll 实例 fd；
-- 关闭注册到 epoll 的普通 socket 或文件 fd；
-
-~~~C++
-int epfd = epoll_create1(0);
-// ... epoll_ctl 添加或等待事件
-
-close(epfd);  // 关闭 epoll 实例，释放内核资源
-~~~
-
-`close(epfd)` 会触发内核将该 epoll 实例释放，同时注销其上挂载的所有 fd 和事件
-
-如果 **忘记 close**：
-
-- 内核资源泄漏（epoll 结构未释放）
-- 系统文件描述符耗尽（EMFILE）
-- 类似内存泄漏但是“内核泄漏”
-
 
 
 # socket ⭐
@@ -987,9 +461,11 @@ Socket 是对 TCP/IP 协议族的一种封装，是应用层与 TCP/IP 协议族
 ### Socket 分类
 
 - SOCK_STREAM 流式：提供一种 **可靠的、面向连接的双向** 数据通信，底层是 TCP 协议
+
 - SOCK_DGRAM 数据报：提供一种 **无连接、不可靠的双向** 数据通信，底层是 UDP
+
 - SOCK_RAW 原始套接字：允许对 **较低层协议（如 IP 或 ICMP）** 进行直接访问，能指定 IP 头部
-  
+
   
 
 ### Socket 用到的概念
@@ -1094,26 +570,65 @@ Socket 一般应用模式也是这种。
 
 
 
-## Socket 通信基本流程
+## Socket 通信流程（TCP）
 
-### TCP Socket
+> 最基础的 TCP 的 Socket 编程，它是阻塞 I/O 模型，基本上只能一对一通信
 
-![tcp socket](./pic/sock_tcp.png)
+<img src="./pic/image-20250828161330723.png" alt="image-20250828161330723" style="zoom: 33%;" />
 
-【服务端】：
+服务器的程序要先跑起来，然后等待客户端的连接和数据。
+
+【**服务端**】：
 
 - **创建 Socket**：使用 `socket()` 创建用于监听连接的 Socket
-- **绑定地址**：使用 `bind()` 将 Socket 绑定到指定的监听 ip 和 端口
+
+- **绑定地址**：使用 `bind()` 将 Socket 绑定到指定的监听 <span style="color:#CC0000;">【ip 和 端口】</span>
+
+  > **绑定端口的目的**：当内核收到 TCP 报文，通过 TCP 头里面的端口号，来找到我们的应用程序，然后把数据传递给我们。
+  >
+  > **绑定 IP 地址的目的**：一台机器是可以有多个网卡的，每个网卡都有对应的 IP 地址，当绑定一个网卡时，内核在收到该网卡上的包，才会发给我们；
+
 - **开始监听**：使用 `listen()` 开始监听客户端连接
+
+  > 如果要判定服务器中一个网络程序有没有启动，可以通过 `netstat` 命令查看对应的端口号是否有被监听。
+
 - **接收客户端的连接**：使用 `accept()` 接收客户端的连接请求
+
 - **关闭 Socket**：通信结束后，使用 `close()` 关闭 socket
 
-【客户端】：
+  
+
+【**客户端**】：
 
 - **创建 Socket**：使用 `socket()` 创建 Socket
-- **连接服务器**：使用 `connect()` 向服务器发出连接请求
-- **数据发送**：使用 `send()` 和 `recv()` 进行对服务器的数据收发
+
+- **连接服务器**：使用 `connect()` 向服务器发出连接请求，该函数的参数要指明服务端的 <span style="color:#CC0000;">【IP 和端口号】</span>
+
+  > 然后 TCP 三次握手就开始了
+
+- **数据发送**：使用 `read()` 和 `write()` 进行对服务器的数据收发
+
 - **关闭 Socket**：通信结束后，使用 `close()` 关闭 socket
+
+
+
+在 TCP 连接的过程中，**服务器的内核实际上为每个 Socket 维护了两个队列**：
+
+- 一个是「还没完全建立」连接的队列，称为 **TCP 半连接队列**，这个队列都是没有完成三次握手的连接，此时服务端处于 `syn_rcvd` 的状态；
+- 一个是「已经建立」连接的队列，称为 **TCP 全连接队列**，这个队列都是完成了三次握手的连接，此时服务端处于 `established` 状态；
+
+当 TCP 全连接队列不为空后，服务端的 `accept()` 函数，就会从内核中的 TCP 全连接队列里**拿出一个已经完成连接的 Socket** 返回应用程序，**后续数据传输都用这个 Socket**。
+
+
+
+**注意，监听的 Socket 和真正用来传数据的 Socket 是两个：**
+
+- 一个叫作**监听 Socket**；
+- 一个叫作**已连接 Socket**；
+
+
+
+连接建立后，客户端和服务端就开始相互传输数据了，双方都可以通过 `read()` 和 `write()` 函数来读写数据。
 
 
 
@@ -1122,17 +637,18 @@ Socket 一般应用模式也是这种。
 服务端：
 
 ~~~C++
-int sockfd = socket(AF_INET, SOCK_STREAM, 0); // 1. 创建 socket
+int sockfd = socket(AF_INET, SOCK_STREAM, 0); // 1. 创建 socket（IPv4，TCP）
 
 sockaddr_in addr; // 地址结构
 addr.sin_family = AF_INET;
 addr.sin_port = htons(8080);
 addr.sin_addr.s_addr = INADDR_ANY;
-bind(sockfd, (sockaddr*)&addr, sizeof(addr)); // 2. 绑定本地地址
+
+bind(sockfd, (sockaddr*)&addr, sizeof(addr)); // 2. 绑定本地地址 【所有ip ：8080】
 
 listen(sockfd, SOMAXCONN);                    // 3. 开始监听
 
-int connfd = accept(sockfd, NULL, NULL);      // 4. 接受客户端连接
+int connfd = accept(sockfd, NULL, NULL);      // 4. 接受客户端连接 connfd接收客户端的Sockfd
 
 char buffer [1024];
 read(connfd, buffer, sizeof(buffer));         // 5. 接收客户端数据
@@ -1147,7 +663,7 @@ close(sockfd);
 
 ~~~C++
 int sockfd = socket(AF_INET, SOCK_STREAM, 0);   // 1. 创建 socket
-connect(sockfd, ...);                           // 2. 主动连接服务端
+connect(sockfd, server_addr, ...);              // 2. 主动连接服务端，指明服务端的 IP 和端口号
 write(sockfd, ...);                             // 3. 发送数据
 read(sockfd, ...);                              // 4. 接收数据
 shutdown(sockfd, SHUT_WR);                      // 5. 可选：关闭写
@@ -1156,9 +672,41 @@ close(sockfd);                                  // 6. 关闭连接
 
 
 
-### UDP Socket
+## Socket 也是【文件】
 
-![udp socket](./pic/sock_udp.png)
+读写 Socket 的方式，好像读写文件一样。
+
+是的，基于 Linux 一切皆文件的理念，在内核中 Socket 也是以「文件」的形式存在的，也是有对应的文件描述符。
+
+**文件描述符 fd ：**
+
+每一个进程都有一个数据结构 `task_struct`，该结构体里有一个指向「文件描述符数组」的成员指针。
+
+「文件描述符数组」里列出这个进程打开的所有文件的文件描述符。
+
+- 数组的下标是文件描述符，是一个整数，
+- 而数组的内容是一个指针，指向内核中所有打开的文件的列表
+
+也就是说**内核可以通过文件描述符找到对应打开的文件**。
+
+
+
+然后每个文件都有一个 **inode**，Socket 文件的 inode 指向了内核中的 Socket 结构，在这个结构体里有两个队列，分别是**发送队列**和**接收队列**，这个两个队列里面保存的是一个个 `struct sk_buff`，用链表的组织形式串起来。
+
+**sk_buff** 可以表示各个层的数据包，在应用层数据包叫 data，在 TCP 层我们称为 segment，在 IP 层我们叫 packet，在数据链路层称为 frame。
+
+> 为什么全部数据包只用一个结构体来描述呢？
+>
+> 协议栈采用的是分层结构，上层向下层传递数据时需要增加包头，下层向上层数据时又需要去掉包头，如果每一层都用一个结构体，那在层之间传递数据的时候，就要发生多次拷贝，这将大大降低 CPU 效率。
+>
+> 于是，为了在层级之间传递数据时，不发生拷贝，只用 sk_buff 一个结构体来描述所有的网络包，那它是如何做到的呢？
+>
+> 是通过调整 sk_buff 中 `data` 的指针，比如：
+>
+> - 当接收报文时，从网卡驱动开始，通过协议栈层层往上传送数据报，通过增加 skb->data 的值，来逐步剥离协议首部。
+> - 当要发送报文时，创建 sk_buff 结构体，数据缓存区的头部预留足够的空间，用来填充各层首部，在经过各下层协议时，通过减少 skb->data 的值来增加协议首部。
+
+
 
 
 
@@ -1298,7 +846,7 @@ ntohl() - Network to Host Long
 | 发起连接     | `connect()`                     | 主动向服务端发起 TCP 连接请求                                | 客户端        |
 | 读写         | `read()` / `write()`            | 从 socket 读/写数据（字节流）                                | 双方          |
 | 读写（增强） | `send()`/`recv()` /             | TCP 专用，发送接收数据<br />与 `read` / `write` 类似，可带 flags 控制行为 | 双方          |
-|              | `sendto()` / `recvfrom()`       | UDP 专用，发送接收数据，指定端口和 ip                         | 双方          |
+|              | `sendto()` / `recvfrom()`       | UDP 专用，发送接收数据，指定端口和 ip                        | 双方          |
 | 地址处理     | `getsockname()`                 | 获取本端 socket 绑定的地址信息                               | 双方          |
 | 地址处理     | `getpeername()`                 | 获取对端（peer）socket 地址信息                              | 双方          |
 | 参数设置     | `setsockopt()`                  | 设置 socket 选项（如：TCP_NODELAY, SO_REUSEADDR）            | 双方          |
@@ -1834,7 +1382,7 @@ int main() {
         return 1;
     }
  
-    // 把服务端用于通信的 IP + 端口 绑定到socket上
+    // 把服务端用于通信的 IP + 端口【所有ip：12345】 绑定到socket上
     sockaddr_in server_addr{};                // 存放服务端IP和端口的数据结构
     server_addr.sin_family = AF_INET;         // IPv4
     server_addr.sin_addr.s_addr = INADDR_ANY; // IP 地址 监听所有网络接口（服务端任意网卡的IP都可以用于通讯）
@@ -1909,12 +1457,13 @@ int main() {
         return 1;
     }
  
-    // 向服务器发起连接请求 127.0.0.1:12345
+    // 向服务器发起连接请求 【127.0.0.1:12345】
     sockaddr_in server_addr{}; // 存放服务端IP和端口的结构体
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(12345);                    // 服务器端口
     inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr); // 服务器 IP 地址
 
+    // connect 指明服务端的 IP 和端口号
     if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr))) { // 请求连接 Socket 和 服务端
         std::cerr << "连接服务器失败\n";
         close(client_socket);
@@ -1949,3 +1498,779 @@ int main() {
 运行结果
 
 ![image-20250823001740489](./pic/image-20250823001740489.png)
+
+
+
+# 如何服务更多的用户？
+
+前面提到的 TCP Socket 调用流程是最简单、最基本的，它基本**只能一对一通信**，因为使用的是**同步阻塞**的方式，当服务端在还没处理完一个客户端的网络 I/O 时，或者 读写操作发生阻塞时，其他客户端是无法与服务端连接的。
+
+可如果我们服务器只能服务一个客户，那这样就太浪费资源了，于是我们要改进这个网络 I/O 模型，以支持更多的客户端。
+
+
+
+*在改进网络 I/O 模型前，先考虑一个问题，**服务器单机理论最大能连接多少个客户端？***
+
+TCP 连接是由四元组唯一确认的，这个四元组就是：**本机IP, 本机端口, 对端IP, 对端端口**。
+
+服务器作为服务方，通常会在本地固定监听一个端口，等待客户端的连接。因此服务器的本地 IP 和端口是固定的，于是对于服务端 TCP 连接的四元组只有对端 IP 和端口是会变化的，所以**<span style="color:#CC0000;">最大 TCP 连接数 = 客户端 IP 数×客户端端口数</span>**。
+
+对于 IPv4，客户端的 IP 数最多为 2 的 32 次方，客户端的端口数最多为 2 的 16 次方，也就是**服务端单机最大 TCP 连接数约为 <span style="color:#CC0000;">2 的 48 次方</span>**。
+
+这个理论值相当“丰满”，但是服务器肯定承载不了那么大的连接数，**主要会受两个方面的限制**：
+
+- **文件描述符**，Socket 实际上是一个文件，也就会对应一个文件描述符。在 Linux 下，单个进程打开的文件描述符数是有限制的，没有经过修改的值一般都是 1024，不过我们可以通过 ulimit 增大文件描述符的数目；
+- **系统内存**，每个 TCP 连接在内核中都有对应的数据结构，意味着每个连接都是会占用一定内存的；
+
+
+
+***那如果服务器的内存只有 2 GB，网卡是千兆的，能支持并发 1 万请求吗？***
+
+并发 1 万请求，也就是经典的 C10K 问题 ，C 是 Client 单词首字母缩写，C10K 就是单机同时处理 1 万个请求的问题。
+
+从硬件资源角度看，对于 2GB 内存千兆网卡的服务器，如果每个请求处理占用不到 200KB 的内存和 100Kbit 的网络带宽就可以满足并发 1 万个请求。
+
+不过，要想真正实现 C10K 的服务器，要考虑的地方在于服务器的网络 I/O 模型，效率低的模型，会加重系统开销，从而会离 C10K 的目标越来越远。
+
+
+
+# 多进程模型
+
+基于最原始的阻塞网络 I/O， 如果服务器要支持多个客户端，其中比较传统的方式，就是使用**多进程模型**，也就是为**每个客户端分配一个进程**来处理请求。
+
+服务器的**主进程负责监听客户的连接**，一旦与客户端连接完成，accept() 函数就会返回一个「**已连接 Socket**」，这时就通过 `fork()` 函数创建一个**子进程**，实际上就把父进程所有相关的东西都**复制**一份，包括文件描述符、内存地址空间、程序计数器、执行的代码等。
+
+这两个进程刚复制完的时候，几乎一模一样。不过，会根据**返回值**来区分是父进程还是子进程，如果返回值是 0，则是子进程；如果返回值是其他的整数，就是父进程。
+
+正因为子进程会**复制父进程的文件描述符**，于是就可以直接使用「已连接 Socket 」和客户端通信了，
+
+可以发现，子进程不需要关心「监听 Socket」，只需要关心「已连接 Socket」；父进程则相反，将客户服务交给子进程来处理，因此父进程不需要关心「已连接 Socket」，只需要关心「监听 Socket」。
+
+下面这张图描述了从连接请求到连接建立，父进程创建生子进程为客户服务。
+
+![image-20250828172721029](./pic/image-20250828172721029.png)
+
+
+
+另外，当「子进程」退出时，实际上内核里还会保留该进程的一些信息，也是会占用内存的，如果不做好“回收”工作，就会变成**僵尸进程**，随着僵尸进程越多，会慢慢耗尽我们的系统资源。
+
+因此，**父进程要“善后”好自己的孩子，怎么善后呢？**
+
+那么有两种方式可以在子进程退出后回收资源，分别是调用 `wait()` 和 `waitpid()` 函数。
+
+
+
+这种用多个进程来应付多个客户端的方式，在应对 100 个客户端还是可行的，但是当客户端数量高达一万时，肯定扛不住的，因为**每产生一个进程，必会占据一定的系统资源**，而且**进程间上下文切换**的“包袱”是很重的，性能会大打折扣。
+
+进程的上下文切换不仅包含了虚拟内存、栈、全局变量等用户空间的资源，还包括了内核堆栈、寄存器等内核空间的资源。
+
+
+
+# 多线程模型
+
+既然进程间上下文切换的“包袱”很重，那我们就搞个比较轻量级的模型来应对多用户的请求 —— **多线程模型**。
+
+**线程是运行在进程中的一个“逻辑流”**，单进程中可以运行多个线程，**同进程里的线程可以共享进程的部分资源**，比如文件描述符列表、进程空间、代码、全局数据、堆、共享库等，这些共享些资源在上下文切换时不需要切换，而只需要切换线程的私有数据、寄存器等不共享的数据，因此**同一个进程下的线程上下文切换的开销要比进程小得多。**
+
+当服务器与客户端 TCP 完成连接后，通过 `pthread_create()` 函数创建线程，然后**将「已连接 Socket」的文件描述符传递给线程函数**，接着**在线程里和客户端进行通信**，从而达到并发处理的目的。
+
+
+
+如果每来一个连接就创建一个线程，线程运行完后，还得操作系统还得销毁线程，虽说线程切换的上写文开销不大，但是如果**频繁创建和销毁线程，系统开销也是不小的**。
+
+那么，我们可以使用**<span style="color:#CC0000;">线程池</span>**的方式来避免线程的频繁创建和销毁，所谓的线程池，就是**提前创建若干个线程**，这样当由新连接建立时，将这个**已连接的 Socket 放入到一个队列里**，然后线程池里的线程负责从队列中取出「已连接 Socket 」进行处理。
+
+![image-20250828205914362](./pic/image-20250828205914362.png)
+
+需要注意的是，这个队列是全局的，每个线程都会操作，为了避免多线程竞争，<span style="color:#CC0000;">线程在操作这个队列前要加锁</span>。
+
+
+
+
+
+
+
+#  I/O 多路复用
+
+> 上面**基于进程或者线程模型的，每个进程/线程只能处理一路 IO**，在服务器并发数较高的情况下，过多的进程/线程会使得服务器性能下降。
+>
+> 新到来一个 TCP 连接，就需要分配一个进程或者线程，那么如果要达到 C10K，意味着要一台机器维护 1 万个连接，相当于要维护 1 万个进程/线程，操作系统就算死扛也是扛不住的。
+>
+> 通过多路 IO 复用，能使得 **一个进程同时处理多路 IO**
+
+既然为每个请求分配一个进程/线程的方式不合适，那**有没有可能只使用一个进程来维护多个 Socket 呢？**答案是有的，那就是 **I/O 多路复用**技术。
+
+<img src="./pic/image-20250828210142593.png" alt="image-20250828210142593" style="zoom: 33%;" />
+
+一个进程虽然任一时刻只能处理一个请求，但是处理每个请求的事件时，耗时控制在 1 毫秒以内，这样 1 秒内就可以处理上千个请求，把时间拉长来看，**多个请求复用了一个进程**，这就是多路复用，这种思想很类似一个 CPU 并发多个进程，所以也叫做时分多路复用。
+
+
+
+Linux 下有三种提供 I/O 多路复用的 API，分别是：**select、poll、epoll**，是内核提供给用户态的多路复用系统调用，进程可以通过一个系统调用函数从内核中获取多个事件。
+
+select/poll/epoll 是如何获取网络事件的呢？在获取事件时，**先把所有连接（文件描述符）传给内核，再由内核返回产生了事件的连接**，然后在用户态中再处理这些连接对应的请求即可。
+
+
+
+## select/poll
+
+select  poll 都是 Linux 提供的 I/O 多路复用机制。
+
+**select/poll 实现多路复用的方式**：
+
+- 将已连接的 Socket 都放到一个【Socket集合】
+- 然后通过 select/poll 系统调用，将【Socket集合】从用户态**拷贝到内核**
+- 让内核来检查是否有网络事件产生，检查的方式就是通过**遍历** 【Socket集合】
+- 当检查到有事件产生后，将此 Socket 标记为可读或可写
+- 再把整个【Socket集合】**拷贝回用户态**里
+- 用户态还需要再**遍历**整个【Socket集合】找到可读或可写的 Socket，然后再对其处理。
+
+
+
+所以需要进行 **<span style="color:#0000FF;">2 次「遍历」文件描述符集合</span>**，一次是在内核态里，一个次是在用户态里 ;
+
+而且还会发生 **<span style="color:#0000FF;">2 次「拷贝」文件描述符集合</span>**，先从用户空间传入内核空间，由内核修改后，再传到用户空间。
+
+
+
+**select** 使用固定长度的 **BitsMap** 表示 Socket集合，而且所支持的文件描述符的个数是有限制的，在 Linux 系统中，由内核中的 FD_SETSIZE 限制， 默认最大值为 `1024`，**只能监听 0~1023 的文件描述符**。
+
+**poll** 不再用 BitsMap 来存储所关注的Socket集合，取而代之用动态数组，以链表形式来组织，突破了 select 的文件描述符个数限制，当然还会**受到系统文件描述符限制**。
+
+
+
+所以，poll 和 select 并没有太大的本质区别，都是**使用「线性结构」存储进程关注的 Socket 集合**，因此都需要**遍历** Socket 集合来找到可读或可写的 Socket，时间复杂度为 O(n)；而且也需要在用户态与内核态之间**拷贝**Socket 集合，这种方式随着并发数上来，性能的损耗会呈指数级增长。
+
+
+
+当客户端越多，也就是 Socket 集合越大，**Socket 集合的遍历和拷贝会带来很大的开销**，因此也很难应对 C10K。
+
+
+
+
+
+## epoll ⭐
+
+`epoll` 是 Linux 内核提供的高效 I/O 事件通知机制，用于处理大量并发连接。
+
+### 基本流程
+
+- **注册监听事件**（如可读、可写）
+- **等待事件发生**（阻塞或非阻塞方式）
+- **获取就绪的文件描述符**（仅返回有事件的，不需要遍历全部）
+
+
+
+它的核心作用是 **监听多个文件描述符（如Socketfd）是否有事件发生，并高效返回就绪的文件描述符**，避免了传统 `select/poll` 方式的低效轮询。
+
+> 就像一个 **智能消息通知系统**，你告诉它要关注哪些文件（比如网络连接），它会在这些文件有变化（比如数据可读）时 **只通知你有变化的那些**，而不是让你一个个去检查。这样能 **高效处理大量并发连接**，比如服务器同时和成千上万的客户端通信。
+>
+
+
+
+**epoll 的用法**：
+
+如下的代码中，先用e poll_create 创建一个 epol l对象 epfd，再通过 epoll_ctl 将需要监视的 socket 添加到epfd中，最后调用 epoll_wait 等待数据。
+
+```c
+int s = socket(AF_INET, SOCK_STREAM, 0);
+bind(s, ...);
+listen(s, ...)
+
+int epfd = epoll_create(...); // 创建一个 epoll对象 epfd
+epoll_ctl(epfd, ...); 		  // 将所有需要监听的socket添加到epfd中
+
+while(1) {
+    int n = epoll_wait(...);  // 调用 epoll_wait 等待数据
+    for(接收到数据的socket){
+        //处理
+    }
+}
+```
+
+
+
+### 红黑树和事件驱动
+
+epoll 通过两个方面，很好解决了 select/poll 的问题。
+
+- **第一点，红黑树**
+  - epoll 在内核里使用**红黑树来跟踪进程所有待检测的文件描述字**，把需要监控的 socket 通过 `epoll_ctl()` 函数加入内核中的红黑树里
+  - 红黑树是个高效的数据结构，增删改一般时间复杂度是 `O(logn)`
+  - 而 select/poll 内核里没有类似 epoll 红黑树这种保存所有待检测的 socket 的数据结构，所以 select/poll 每次操作时都传入整个 socket 集合给内核
+  - 而 epoll 因为在内核维护了红黑树，可以**保存所有待检测的 socket** ，所以只需要传入一个待检测的 socket，减少了内核和用户空间大量的数据拷贝和内存分配。
+
+- **第二点， 事件驱动**
+  - epoll 使用**事件驱动**的机制，内核里维护了一个**链表来记录就绪事件**
+  - 当某个 socket 有事件发生时，通过**回调函数**，内核会将其加入到这个就绪事件列表中
+  - 当用户调用 `epoll_wait()` 函数时，只会**返回有事件发生的文件描述符的个数**，不需要像 select/poll 那样轮询扫描整个 socket 集合，大大提高了检测的效率。
+
+
+
+![image-20250828223726276](./pic/image-20250828223726276.png)
+
+
+
+epoll 的方式即使监听的 Socket 数量越多的时候，效率不会大幅度降低，能够同时监听的 Socket 的数目也非常的多了，**上限就为系统定义的进程打开的最大文件描述符个数**。因而，**epoll 被称为解决 C10K 问题的利器**。
+
+
+
+插个题外话，网上文章不少说，`epoll_wait` 返回时，对于就绪的事件，epoll 使用的是共享内存的方式，即用户态和内核态都指向了就绪链表，所以就避免了内存拷贝消耗。
+
+这是错的！看过 epoll 内核源码的都知道，**压根就没有使用共享内存这个玩意**。你可以从下面这份代码看到， epoll_wait 实现的内核代码中调用了 `__put_user` 函数，这个函数就是将数据从内核拷贝到用户空间。
+
+<img src="./pic/image-20250828224136215.png" alt="image-20250828224136215" style="zoom:33%;" />
+
+
+
+### 边沿触发 ET 和 水平触发 LT
+
+epoll 支持两种事件触发模式，分别是边缘触发（edge-triggered，ET）和水平触发（level-triggered，LT）。
+
+**水平触发**：是只要满足事件的条件，比如内核中有数据需要读，就**一直不断地把这个事件传递给用户**；
+
+**边缘触发**：是**只有第一次满足条件的时候才触发**，之后就不会再传递同样的事件了。
+
+
+
+当被监控的 Socket fd 上有可读事件发生时：
+
+- 使用边缘触发：
+  - **服务器端只会从 epoll_wait 中苏醒一次**
+  - 即使进程没有调用 read 函数从内核读取数据，也依然只苏醒一次，因此我们程序要保证一次性将内核缓冲区的数据读取完
+- 使用水平触发：
+  - **服务器端不断地从 epoll_wait 中苏醒，直到内核缓冲区数据被 read 函数读完才结束**，目的是**告诉我们有数据需要读取**
+
+
+
+> 举个例子，你的快递被放到了一个快递箱里，如果快递箱只会通过短信通知你一次，即使你一直没有去取，它也不会再发送第二条短信提醒你，这个方式就是边缘触发；如果快递箱发现你的快递没有被取出，它就会不停地发短信通知你，直到你取出了快递，它才消停，这个就是水平触发的方式。
+
+
+
+**如果使用水平触发模式**：
+
+当内核通知文件描述符可读写时，**接下来还可以继续去检测它的状态**，看它是否依然可读或可写。所以在收到通知后，**没必要一次执行尽可能多的读写操作**。
+
+
+
+**如果使用边缘触发模式**：
+
+I/O 事件发生时只会通知一次，而且我们不知道到底能读写多少数据，所以在**收到通知后应尽可能地读写数据**，以免错失读写的机会。因此，我们会**循环**从文件描述符读写数据，那么如果文件描述符是阻塞的，没有数据可读写时，进程会阻塞在读写函数那里，程序就没办法继续往下执行。
+
+所以，边缘触发模式**一般和非阻塞 I/O 搭配使用**，程序会**一直执行 I/O 操作**，直到系统调用（如 `read` 和 `write`）返回错误，错误类型为 `EAGAIN` 或 `EWOULDBLOCK`。
+
+
+
+**一般来说，边缘触发的效率比水平触发的效率要高**，因为边缘触发可以减少 epoll_wait 的系统调用次数，系统调用也是有一定的开销的的，毕竟也存在上下文的切换。
+
+
+
+**select/poll 只有水平触发模式**，**epoll 默认的触发是水平触发**，但是可以根据应用场景设置为边缘触发模式。
+
+
+
+另外，**使用 I/O 多路复用时，最好搭配非阻塞 I/O 一起使用**，Linux 手册关于 select 的内容中有如下说明：
+
+> 在Linux下，select() 可能会将一个 socket 文件描述符报告为 "准备读取"，而后续的读取块却没有。例如，当数据已经到达，但经检查后发现有错误的校验和而被丢弃时，就会发生这种情况。也有可能在其他情况下，文件描述符被错误地报告为就绪。因此，在不应该阻塞的 socket 上使用 O_NONBLOCK 可能更安全。
+
+简单点理解，就是**多路复用 API 返回的事件并不一定可读写的**，如果使用阻塞 I/O， 那么在调用 read/write 时则会发生程序阻塞，因此最好搭配非阻塞 I/O，以便应对极少数的特殊情况。
+
+
+
+
+
+### epoll API
+
+#### sys/epoll.h
+
+该头文件定义了 Linux 下 **epoll 的核心接口和数据结构**，是高性能 I/O 多路复用的重要基础设施之一。
+
+~~~C++
+/* Copyright (C) 2002-2022 Free Software Foundation, Inc.
+   This file is part of the GNU C Library.
+
+   The GNU C Library is free software; you can redistribute it and/or
+   modify it under the terms of the GNU Lesser General Public
+   License as published by the Free Software Foundation; either
+   version 2.1 of the License, or (at your option) any later version.
+
+   The GNU C Library is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Lesser General Public License for more details.
+
+   You should have received a copy of the GNU Lesser General Public
+   License along with the GNU C Library; if not, see
+   <https://www.gnu.org/licenses/>.  */
+
+#ifndef	_SYS_EPOLL_H
+#define	_SYS_EPOLL_H	1  // 防止头文件被重复包含
+
+#include <stdint.h>		// 提供 uint32_t、uint64_t 等固定宽度整数类型
+#include <sys/types.h>	// 提供 size_t、pid_t 等通用类型
+
+#include <bits/types/sigset_t.h>		// 信号掩码类型定义
+#include <bits/types/struct_timespec.h> // timespec 结构体定义，用于高精度时间
+
+/* Get the platform-dependent flags.  */
+#include <bits/epoll.h> // 平台相关的 epoll 常量和实现定义
+
+/* 数据结构打包宏 */
+#ifndef __EPOLL_PACKED	// 条件定义 __ EPOLL_PACKED，可用于结构体内存对齐优化（目前未具体实现）
+# define __EPOLL_PACKED
+#endif
+
+
+/* EPOLL 事件常量枚举 */
+// 这些常量是 epoll_event.events 中使用的位掩码，用于标识感兴趣的 I/O 事件
+enum EPOLL_EVENTS
+  {
+    EPOLLIN = 0x001,	 // 有数据可读
+#define EPOLLIN EPOLLIN
+    EPOLLPRI = 0x002,	 // 有紧急数据可读
+#define EPOLLPRI EPOLLPRI
+    EPOLLOUT = 0x004,	 // 有数据可写
+#define EPOLLOUT EPOLLOUT
+    EPOLLRDNORM = 0x040, // 普通可读数据（与 EPOLLIN 重合）
+#define EPOLLRDNORM EPOLLRDNORM
+    EPOLLRDBAND = 0x080, // 优先级带可读数据
+#define EPOLLRDBAND EPOLLRDBAND
+    EPOLLWRNORM = 0x100, // 普通可写数据
+#define EPOLLWRNORM EPOLLWRNORM
+    EPOLLWRBAND = 0x200, // 优先级带可写数据
+#define EPOLLWRBAND EPOLLWRBAND
+    EPOLLMSG = 0x400,	 // 保留位，未被使用
+#define EPOLLMSG EPOLLMSG
+    EPOLLERR = 0x008,	 // 出错事件（读写都会触发）
+#define EPOLLERR EPOLLERR
+    EPOLLHUP = 0x010,	// 对端关闭连接（挂起）
+#define EPOLLHUP EPOLLHUP
+    EPOLLRDHUP = 0x2000,// 对端关闭了读操作
+#define EPOLLRDHUP EPOLLRDHUP
+    EPOLLEXCLUSIVE = 1u << 28,	// 仅用于 epoll 实现的锁优化（不能用户级设置）
+#define EPOLLEXCLUSIVE EPOLLEXCLUSIVE
+    EPOLLWAKEUP = 1u << 29,		// 防止系统挂起（需要 CAP_BLOCK_SUSPEND 权限）
+#define EPOLLWAKEUP EPOLLWAKEUP
+    EPOLLONESHOT = 1u << 30,	// 一次触发事件后必须重新注册
+#define EPOLLONESHOT EPOLLONESHOT
+    EPOLLET = 1u << 31			// 边沿触发，高性能但复杂
+#define EPOLLET EPOLLET
+  };
+
+
+/**
+* epoll_ctl 是用于控制 epoll 实例的系统调用
+* 其操作码（operation code）用于指定你想对 epoll 实例执行的操作
+*/
+
+/* Valid opcodes ( "op" parameter ) to issue to epoll_ctl(). epoll_ctl 操作码 */
+// 注册新的 fd 到 epoll 实例
+#define EPOLL_CTL_ADD 1	/* Add a file descriptor to the interface.  */
+// 从 epoll 实例移除 fd
+#define EPOLL_CTL_DEL 2	/* Remove a file descriptor from the interface.  */
+// 修改 fd 的监听事件
+#define EPOLL_CTL_MOD 3	/* Change file descriptor epoll_event structure.  */
+
+
+// 用户自定义数据，用于 epoll 事件附带的数据，用户可自由使用
+typedef union epoll_data
+{
+  void *ptr;	
+  int fd;		
+  uint32_t u32;
+  uint64_t u64;
+} epoll_data_t;
+
+
+// 核心事件结构体，用户在调用 epoll_ctl 和 epoll_wait 是传入或接收该结构体
+struct epoll_event
+{
+  uint32_t events;	/* Epoll events 事件掩码（EPOLLIN 等）*/
+  epoll_data_t data;	/* User data variable 用户数据*/
+} __EPOLL_PACKED;
+
+
+__BEGIN_DECLS // C 语言兼容标记，用于兼容 C++，声明 extern "C"
+
+
+// 创建 epoll 实例
+/* Creates an epoll instance.  Returns an fd for the new instance.
+   The "size" parameter is a hint specifying the number of file
+   descriptors to be associated with the new instance.  The fd
+   returned by epoll_create() should be closed with close().  */
+extern int epoll_create (int __size) __ THROW;
+
+// 创建带标志位的 epoll 实例
+/* Same as epoll_create but with an FLAGS parameter.  The unused SIZE
+   parameter has been dropped.  */
+extern int epoll_create1 (int __flags) __ THROW;
+
+
+// 注册/删除/修改 epoll 事件
+/* Manipulate an epoll instance "epfd". Returns 0 in case of success,
+   -1 in case of error ( the "errno" variable will contain the
+   specific error code ) The "op" parameter is one of the EPOLL_CTL_*
+   constants defined above. The "fd" parameter is the target of the
+   operation. The "event" parameter describes which events the caller
+   is interested in and any associated user data.  */
+extern int epoll_ctl (
+    int __epfd, 
+    int __op, 
+    int __fd,	      
+    struct epoll_event *__event
+) __THROW;
+
+
+/* Wait for events on an epoll instance "epfd". Returns the number of
+   triggered events returned in "events" buffer. Or -1 in case of
+   error with the "errno" variable set to the specific error code. The
+   "events" parameter is a buffer that will contain triggered
+   events. The "maxevents" is the maximum number of events to be
+   returned ( usually size of "events" ). The "timeout" parameter
+   specifies the maximum wait time in milliseconds (-1 == infinite).
+
+   This function is a cancellation point and therefore not marked with
+   __THROW.  */
+extern int epoll_wait (
+    int __epfd, 
+    struct epoll_event *__events,
+    int __maxevents, 
+    int __timeout
+);
+
+
+/* Same as epoll_wait, but the thread's signal mask is temporarily
+   and atomically replaced with the one provided as parameter.
+
+   This function is a cancellation point and therefore not marked with
+   __THROW.  */
+extern int epoll_pwait (int __epfd, struct epoll_event *__events,
+			int __maxevents, int __ timeout,
+			const __sigset_t *__ss);
+
+/* Same as epoll_pwait, but the timeout as a timespec.
+
+   This function is a cancellation point and therefore not marked with
+   __THROW.  */
+#ifndef __USE_TIME_BITS64
+extern int epoll_pwait2 (int __epfd, struct epoll_event *__events,
+			 int __maxevents, const struct timespec *__timeout,
+			 const __sigset_t *__ss);
+#else
+# ifdef __REDIRECT
+extern int __REDIRECT (epoll_pwait2, (int __ epfd, struct epoll_event *__ev,
+				      int __maxevs,
+				      const struct timespec *__timeout,
+				      const __sigset_t *__ss),
+		       __epoll_pwait2_time64);
+# else
+#  define epoll_pwait2 __epoll_pwait2_time64
+# endif
+#endif
+
+__END_DECLS
+
+#endif /* sys/epoll.h */
+
+~~~
+
+
+
+#### epoll_event
+
+~~~C++
+// 用户自定义数据，用于 epoll 事件附带的数据，用户可自由使用 
+typedef union epoll_data
+{
+  void *ptr;	// 用户可以传入一个指针，用来在回调时识别来源	
+  int fd;		
+  uint32_t u32; 
+  uint64_t u64;
+} epoll_data_t;
+~~~
+
+`epoll_data` 是一个 C 语言联合体，用于存放用户自定义的信息，这个信息会随着事件一起返回。
+
+epoll 不关心你到底存了什么，它只是“**帮你带回来**”
+
+epoll_wait 返回事件时，你就可以从 `epoll_event.data` 中拿到之前存的数据，来判断“是哪个 fd 触发的”或“这个 fd 对应哪个连接”等信息。
+
+~~~C++
+// epoll 核心事件结构体，用户在调用 epoll_ctl 和 epoll_wait 是传入或接收该结构体
+struct epoll_event
+{
+  uint32_t events;	 // 关心的事件
+  epoll_data_t data; // epoll附带数据，用户自定义，可以传一个 fd、指针等，epoll_wait 会返回它
+} __EPOLL_PACKED;
+~~~
+
+`events` 支持的宏（掩码）常用的如下：
+
+- `EPOLLIN`：可读
+- `EPOLLOUT`：可写
+- `EPOLLET`：边缘触发
+- `EPOLLONESHOT`：只触发一次
+- `EPOLLHUP`：挂起
+- `EPOLLERR`：错误
+
+**用到的事件类型 `EPOLLIN`、`EPOLLPRI`、`EPOLLOUT`**
+
+这些宏定义来自 `<sys/epoll.h>`，用于表示 **内核态监听文件描述符（fd）上发生的事件类型**。
+
+~~~C++
+// epoll.h 中
+enum EPOLL_EVENTS
+  {
+    EPOLLIN = 0x001,		// 0000 0001
+#define EPOLLIN EPOLLIN		// 对应的 fd 上有数据可读（包括对端关闭的情况）
+    
+    EPOLLPRI = 0x002,		// 0000 0010
+#define EPOLLPRI EPOLLPRI	// 对应的 fd 有紧急数据可读（带外数据）一般用于 TCP 的紧急数据（少见）
+    
+    EPOLLOUT = 0x004,		// 0000 0100
+#define EPOLLOUT EPOLLOUT	// 对应的 fd 可以进行 非阻塞写操作
+    ...
+	}
+~~~
+
+| 宏常量     | 十六进制值 | 意义             | 用途                         |
+| ---------- | ---------- | ---------------- | ---------------------------- |
+| `EPOLLIN`  | `0x001`    | 有数据可读       | TCP 收数据、accept 新连接    |
+| `EPOLLPRI` | `0x002`    | 有紧急数据可读   | 带外数据（OOB），较少用      |
+| `EPOLLOUT` | `0x004`    | 可写入（不阻塞） | 发送数据、非阻塞连接建立完成 |
+
+
+
+#### epoll 生命周期
+
+~~~C++
+1. 创建 epoll 实例
+   ┌─────────────────────────────┐
+   │ epollfd = epoll_create1()   │  → 创建成功后返回一个 epoll 实例的 fd
+   └─────────────────────────────┘
+
+2. 注册 / 修改 / 删除感兴趣的事件（对应的 fd）
+   ┌────────────────────────────────────────────────────────────────┐
+   │ epoll_ctl(epollfd, EPOLL_CTL_ADD / MOD / DEL, fd, &event)      │
+   └────────────────────────────────────────────────────────────────┘
+
+3. 等待事件（阻塞/非阻塞）
+   ┌────────────────────────────────────────────────────────────┐
+   │ int n = epoll_wait(epollfd, events, maxEvents, timeoutMs); │
+   └────────────────────────────────────────────────────────────┘
+     - `events` 是 epoll_event 的数组
+     - `n` 表示有多少事件发生了，需遍历处理
+
+4. 关闭 epoll 实例（资源释放）
+   ┌──────────────────────┐
+   │ close(epollfd)       │
+   └──────────────────────┘
+~~~
+
+
+
+#### epoll_create1() 创建 epoll 实例
+
+`epoll_create1` 是 Linux 下用于 **创建一个 epoll 实例** 的系统调用。该实例可以用于异步监听多个文件描述符（如 socket）的读写事件。
+
+创建成功后，**返回一个指向该 epoll 实例的 文件描述符（fd）**，后续操作（如 `epoll_ctl`、`epoll_wait`）都基于这个 fd。
+
+~~~C++
+#include <sys/epoll.h>
+
+int epoll_create1(int flags); //flags 是控制 epoll 实例行为的标志位，常用值为 EPOLL_CLOEXEC
+~~~
+
+**参数 `flags`** ：
+
+- 控制 epoll 实例行为的标志位
+
+- 常见的 `flags`：
+
+  - `EPOLL_CLOEXEC` ：设置 close-on-exec 标志，当调用 `exec()` 系列函数时，该 fd 会自动关闭，防止 fd 泄漏到子进程中
+
+  - 如果不需要特殊行为，可以传 `0`
+
+**返回值：**
+
+- `>=0`  创建成功，返回 epoll 实例的 fd
+- `<0`   创建失败，返回 `-1` ，并设置 `errno` 错误码
+
+**常见错误码 `errno`：**
+
+| errno 值 | 含义                       |
+| -------- | -------------------------- |
+| `EINVAL` | 传入的 flag 不合法         |
+| `EMFILE` | 进程已打开文件数达上限     |
+| `ENFILE` | 系统级文件描述符总数达上限 |
+| `ENOMEM` | 内存不足，无法分配资源     |
+
+ **与旧接口 `epoll_create` 的区别：**
+
+| 特性    | `epoll_create`         | `epoll_create1`          |
+| ------- | ---------------------- | ------------------------ |
+| 参数    | 需要指定容量（被忽略） | 使用 `flags`             |
+| CLOEXEC | 需要手动设置（fcntl）  | 支持内建 `EPOLL_CLOEXEC` |
+| 推荐性  | 已弃用（glibc 说明）   | ✅ 建议优先使用           |
+
+
+
+**epoll_create() 创建 epoll 实例（已经不推荐使用了）**
+
+创建一个 epoll 实例，创建成功会返回一个文件描述符（epfd）。
+
+~~~C++
+#include <sys/epoll.h>
+
+int epoll_create(int size);
+~~~
+
+该 epoll 实例内部维护一个“红黑树”（用于注册 fd）和一个“就绪链表”（用于返回事件）。这些细节由内核管理。
+
+参数 `size`：**早期内核的提示参数**，用于指定将要监视的最大文件描述符数量的“建议值”。
+
+局限：
+
+- 参数 `size` 被忽略，容易误导开发者。
+- 不支持设置 epoll 实例的行为（如 `EPOLL_CLOEXEC`）。
+
+
+
+#### epoll_ctl() 添加/修改/删除 fd
+
+对 epoll 实例添加/修改/删除监听的 fd。
+
+> 在内核中，使用红黑树存储 fd → event 的映射关系，实现高效查找和修改。就绪事件存在一个链表中。
+
+~~~C++
+#include <sys/epoll.h>
+
+int epoll_ctl(int epfd, 
+              int op,  // 操作类型 add/del/mod
+              int fd, 
+              struct epoll_event *event);
+~~~
+
+**参数：**
+
+- `epfd`   由 `epoll_create1` 返回的 epoll 文件描述符
+
+- `op` 操作类型（操作码）
+
+  ~~~C++
+  #define EPOLL_CTL_ADD 1 // 注册新的 fd 到 epoll 实例
+  #define EPOLL_CTL_DEL 2	// 从 epoll 实例移除 fd
+  #define EPOLL_CTL_MOD 3 // 修改 fd 的监听事件
+  ~~~
+
+- `fd`  目标文件描述符
+
+- `event`  关注的事件集和附加数据（如 `data.ptr`）
+
+> `epfd` 是通过 `epoll_create()` 或 `epoll_create1()` 返回的 **文件描述符**，它就像其他的 `fd`（如 socket、文件）一样，是一个整数，但这个整数只是一个索引，**指向内核空间中的一个 epoll 实例结构体**。
+>
+> 调用 `epoll_ctl(epfd, EPOLL_CTL_ADD, fd, ...)` 时，内核会根据 `epfd` 定位对应的 epoll 实例对象，并将该 `fd` 添加到它的内部结构中。
+>
+> 一个 `epfd` 可以管理 多个 `fd`
+
+**返回值：**
+
+- 成功返回 0，失败返回 -1
+
+错误码（部分）：
+
+- `EBADF`：`epfd` 或 `fd` 非法
+- `EEXIST`：重复添加
+
+- `ENOENT`：修改或删除了未注册的 fd
+
+- `EINVAL`：事件非法或操作错误
+
+
+
+#### epoll_wait() 等待事件
+
+等待 epoll 实例中发生的 I/O 事件。将发生的事件存入 `events` 数组，返回发生事件数量。
+
+~~~C++
+int epoll_wait(int epfd, 
+               struct epoll_event *events,
+               int maxevents, 
+               int timeout);
+~~~
+
+> 将就绪事件从就绪链表（rdlist）复制到用户传入的 `events` 缓冲区。
+>
+> 如果没有事件，根据 `timeout` 阻塞/轮询。
+>
+> 在内核中，使用 `poll_schedule_timeout` 等函数处理等待逻辑
+
+**参数：**
+
+- `epfd`：epoll 实例文件描述符
+- `events`：输出数组，保存发生的事件 （指向 `epoll_event` 的数组首地址指针）
+- `maxevents`：`events` 数组大小（> 0）
+- `timeout`：等待时间
+  - `-1`：无限等待
+  - `0`：立即返回
+  - `> 0`：等待的毫秒数
+
+**返回值：**
+
+- 成功：返回事件数量（0 表示超时）
+- 失败：返回 -1，设置 `errno`
+
+**错误码：**
+
+- `EINTR`：被信号打断
+- `EINVAL`：参数非法
+
+
+
+#### close() 关闭 epoll 实例
+
+[`close()`](#close())用于 **关闭一个打开的文件描述符**，释放与之相关的所有内核资源。头文件 `<unistd.h>`
+
+~~~C++
+#include <unistd.h>
+int close(int fd);
+~~~
+
+**参数：**
+
+- `fd` 要关闭的文件描述符
+
+**返回值：**
+
+- 成功返回 0
+- 失败返回 -1 ，并设置 `errno`，常见错误：
+  - `EBADF`：传入的 `fd` 无效，可能已关闭或未打开
+  - `EINTR`：被信号中断
+
+在 epoll 相关上下文中，例如：
+
+- 关闭通过 `epoll_create1()` 创建的 epoll 实例 fd；
+- 关闭注册到 epoll 的普通 socket 或文件 fd；
+
+~~~C++
+int epfd = epoll_create1(0);
+// ... epoll_ctl 添加或等待事件
+
+close(epfd);  // 关闭 epoll 实例，释放内核资源
+~~~
+
+`close(epfd)` 会触发内核将该 epoll 实例释放，同时注销其上挂载的所有 fd 和事件
+
+如果 **忘记 close**：
+
+- 内核资源泄漏（epoll 结构未释放）
+- 系统文件描述符耗尽（EMFILE）
+- 类似内存泄漏但是“内核泄漏”
+
+
+
+
+
+
+
+# end

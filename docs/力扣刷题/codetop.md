@@ -1077,7 +1077,62 @@ public:
 
 
 
-# 46
+
+
+# 46 [全排列](https://leetcode.cn/problems/permutations/description/?envType=study-plan-v2&envId=top-100-liked)
+
+@回溯  @排列（有顺序）
+
+![image-20250730104329081](pic/image-20250730104329081.png)
+
+![image-20250731105210473](pic/image-20250731105210473.png)
+
+
+
+![image-20250731105252437](pic/image-20250731105252437.png)
+
+~~~C++
+class Solution {
+public:
+    vector<int> path;
+    vector<vector<int>> result;
+
+    // used[i]: 往下走，used 记录这条之路上nums[i]已经取过
+
+    void backtracking(vector<int>& nums, vector<bool>& used) 
+    {
+        if (path.size() == nums.size()) // 全排列，所有数字都要取到
+        {
+            result.push_back(path);
+            return;
+        }
+
+        for (int i = 0; i < nums.size(); i++) // 每次都从0开始取
+        {
+            // 先判断当前nums[i]是否已经取过了，取过了就跳过
+            if (used[i] == true)    continue;
+
+            path.push_back(nums[i]);
+            used[i] = true; 
+
+            backtracking(nums, used);
+
+            path.pop_back();
+            used[i] = false; // used也要回溯
+        }
+    }
+
+
+    vector<vector<int>> permute(vector<int>& nums) {
+
+        vector<bool> used(nums.size(), false);
+        backtracking(nums, used);
+        return result;        
+    }
+};
+~~~
+
+
 
 
 

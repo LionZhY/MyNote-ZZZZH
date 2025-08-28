@@ -183,6 +183,56 @@ git commit --only src/CurrentThread.cpp -m "Update CurrentThread.cpp"
 
 
 
+## ssh的22端口连不上GitHub
+
+![image-20250827005032415](./pic/image-20250827005032415.png)
+
+**1、确认 SSH 是否能连上 GitHub**
+
+~~~shell
+ssh -T git@github.com
+~~~
+
+如果能输出 `Hi xxx! You've successfully authenticated...` 说明连接正常。
+
+如果同样超时，说明是 **网络或端口问题**。（国内的GitHub的22端口经常被阻断）
+
+
+
+**2、配置 SSH 走 443 端口**
+
+> 如果用 SSH，直接改到 **443 端口**。这是 GitHub 官方给出的解决方式，适合国内环境。
+
+编辑 `~/.ssh/config`，直接加入（原内容不用删除）：
+
+> - Windows ：C:\Users\<你的用户名>\.ssh\config`
+> - Linux/Mac：`~/.ssh/config`（如果没有 `config` 文件，就新建一个空白文件即可）
+
+~~~shell
+Host github.com
+  HostName ssh.github.com
+  User git
+  Port 443
+~~~
+
+配置好后执行
+
+~~~shell
+ssh -T git@github.com
+~~~
+
+SSH 第一次连接这个新的端口/主机时，需要确认主机的指纹
+
+![image-20250827005538775](./pic/image-20250827005538775.png)
+
+之后就可以正常push了
+
+
+
+
+
+
+
 # git基础命令
 
 
