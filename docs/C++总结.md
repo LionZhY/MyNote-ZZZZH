@@ -579,6 +579,8 @@ priority_queue<int> maxHeap; // 默认是大顶堆
 // priority_queue<int, vector<int>, less<int>> maxHeap; // 默认就是less
 ~~~
 
+
+
 **小顶堆**（小的元素在top），必须让**比较函数“反过来”**
 
 ~~~C++
@@ -602,9 +604,22 @@ priority_queue<int, vector<int>, greater<int>> minHeap; // 小顶堆
 >
 > 所以 `return a > b;` 表示 `a > b`时，返回true，大的数在后面，小的数在前（top）。
 >
+> `decltype(expr)` 是 C++11 中的一个**类型推导工具**，表示“**expr 的类型**”。
+>
 > 
 >
-> `decltype(expr)` 是 C++11 中的一个**类型推导工具**，表示“**expr 的类型**”。
+> 力扣23，合并k个有序链表，按照节点值排序
+>
+> ~~~C++
+> // 按照节点值排序，大的在后，小的在前
+> auto cmp = [](const ListNode* a, const ListNode* b)
+> {
+>     return a->val > b->val; // 最小堆，大的排后面，每次取top取最小值
+> }
+> priority_queue<ListNode*, vector<ListNode*>, decltype(cmp)> pq;
+> ~~~
+>
+> 
 
 
 
@@ -616,16 +631,20 @@ priority_queue<int, vector<int>, greater<int>> minHeap; // 小顶堆
 
 ~~~C++
 // 小顶堆：仿函数改变 priority_queue 排序
-    class mycomparison{
-    public:
-        bool operator() (const pair<int, int>& lhs, const pair<int, int>& rhs)
-        {
-            return lhs.second > rhs.second; // 次序，较小的在top
-        }
-    };
+class mycomparison{
+public:
+    bool operator() (const pair<int, int>& lhs, const pair<int, int>& rhs)
+    {
+        return lhs.second > rhs.second; // 次序，较小的在top
+    }
+};
 
 priority_queue<pair<int, int>, vector<pair<int, int>>, mycomparison> pri_que;
 ~~~
+
+
+
+
 
 
 
@@ -674,6 +693,220 @@ C++20 `std::ranges` 常用函数
 | **拷贝**     | `copy(src.begin(), src.end(), dest.begin())`                 | `ranges::copy(src, dest.begin())`                          | 源区间可直接传容器。                                |
 |              | `copy_if(...)`                                               | `ranges::copy_if(src, dest.begin(), pred)`                 | 同理，避免迭代器错误。                              |
 | **比较区间** | `equal(a.begin(), a.end(), b.begin())`                       | `ranges::equal(a, b)`                                      | 不必传 `end()`，减少错误。                          |
+
+
+
+# for(&…) 写法
+
+> 力扣48 顺时针旋转矩阵90度
+
+~~~C++
+class Solution {
+public:
+    void rotate(vector<vector<int>>& matrix) {
+        // 两次翻转：(i,j) --> (j,i) --> (j,n−1−i)
+        // - 转置：按照主对角线翻转， (i,j) --> (j,i)
+        // - 行翻转：每一行的内部元素对称翻转，(j,i) --> (j,n−1−i)
+
+        int n = matrix.size();
+
+        // 第一步：主对角线翻转 (i, j) --> (j, i)
+        for (int i = 0; i < n; i++)
+        {
+            for (int j = 0; j < i; j++) // 找主对角线下方的元素
+            {
+                swap(matrix[i][j], matrix[j][i]);
+            }
+        }
+
+        // 第二步：每一行行内对称翻转 (i, j) --> (i,n−1−j) 
+        for (auto& row : matrix)	reverse(row.begin(), row.end());
+    }
+};
+~~~
+
+
+
+关于` for (auto& row : matrix)` 这里为什么用 `&` ？
+
+**如果不用 `&`，操作只作用在副本上**，原矩阵完全不变。只有用 `&`，才能让 `reverse` 直接作用在 `matrix` 里。
+
+> for 循环的三种写法区别
+>
+> (1) `for (auto row : matrix)`
+>
+> - `row` 是 **拷贝** 出来的一行（`vector<int>` 的副本）。
+> - `ranges::reverse(row)` **只会反转副本**，不会影响 `matrix` 里的数据。整个操作对 `matrix` 无效。
+>
+> (2) `for (auto& row : matrix)` ✅
+>
+> - `row` 是对 `matrix` 中行的 **引用**。
+> - `ranges::reverse(row)` 会**直接修改 `matrix` 里对应的那一行**。
+>
+> (3) `for (const auto& row : matrix)`
+>
+> - `row` 是常量引用，不允许修改。
+> - 在这里会报错，因为 `reverse` 需要修改内容。
+
+
+
+
+
+# 宏
+
+## #ifdef  #endif 条件编译
+
+有几个指令可以用来有选择的**对部分程序源代码进行编译**，这个过程称为**条件编译**。
+
+~~~c++
+#ifdef NULL
+   #define NULL 0
+#endif
+~~~
+
+可以只在调试时进行编译，调试开关可以使用一个宏来实现。
+
+~~~c++
+// 如果在指令 #ifdef DEBUG 之前已经定义了符号常量 DEBUG，则会对程序中的 cerr 语句进行编译
+#ifdef DEBUG
+	cerr << "Variable x = " << x << endl;
+#endif
+~~~
+
+可以使用 `#if 0` 语句**注释**掉程序的一部分
+
+~~~c++
+#if 0
+	不进行编译的代码
+#endif
+~~~
+
+示例
+
+~~~c++
+#include <iostream>
+using namespace std;
+#define DEBUG // 定义常量DEBUG
+ 
+#define MIN(a,b) (((a)<(b)) ? a : b) 
+ 
+int main ()
+{
+   int i, j;
+   i = 100;
+   j = 30;
+    
+#ifdef DEBUG
+   cerr <<"Trace: Inside main function" << endl; // 前面已经定义了常量DEBUG，这句会输出
+#endif
+
+
+#if 0
+   /* 这是注释部分 */
+   cout << MKSTR(HELLO C++) << endl; // 已经使用#if 0 注释掉了这部分
+#endif
+ 
+   cout <<"The minimum is " << MIN(i, j) << endl; // 调用参数宏 MIN()
+
+#ifdef DEBUG
+   cerr <<"Trace: Coming out of main function" << endl; // 前面已经定义了DEBUG，这句也会输出
+#endif
+    return 0;
+}
+~~~
+
+
+
+
+
+## 头文件保护宏
+
+头文件保护宏（include guard）利用 **预处理器的条件编译**指令，实现“**只定义一次**”的效果。
+
+**宏定义是全局的**。预处理器在**编译阶段会全局记录宏是否已经定义**。利用这个特性，就能在第一次包含后“屏蔽掉”后续的重复包含。
+
+### 标准写法
+
+~~~C++
+#ifndef 文件名全大写_H // 使用保护宏时，宏名要全局唯一，通常使用 文件名全大写 + _H 的形式。
+#define 文件名全大写_H
+
+// 头文件内容（类、函数声明等）
+
+#endif  
+~~~
+
+例如，skiplist.h中
+
+~~~C++
+#ifndef SKIPLIST_H       // 如果没有定义 SKIPLIST_H（第一次进入）
+#define SKIPLIST_H       // 那就定义它（防止之后再进来）
+
+// 头文件的实际内容，如类定义
+class SkipList {
+    // ...
+};
+
+#endif  // 结束 ifndef
+~~~
+
+工作流程（假设你多次包含该头文件）：
+
+- 第一次包含 `skiplist.h`：
+
+  - `SKIPLIST_H` 还没有定义，`#ifndef` 成立。
+
+  - 执行 `#define SKIPLIST_H`，并展开整个头文件内容。
+
+  - **头文件被真正包含一次**。
+
+- 第二次或更多次包含：
+
+  - `SKIPLIST_H` 已经被定义了。
+
+  - `#ifndef SKIPLIST_H` 不成立。
+
+  - **预处理器直接跳过整个头文件内容，不会重复展开**。
+
+
+
+### 替代方案 #pragma once
+
+~~~C++
+#pragma once
+~~~
+
+适用于大多数现代编译器，效果与保护宏相同。
+
+**告诉编译器 “这个文件只编译一次”**，由编译器保证不会重复包含。
+
+这种写法不是 C++ 标准的一部分，但几乎所有主流编译器（GCC、Clang、MSVC）都支持。
+
+对于软链接或同一文件不同路径 include 的情况，某些老编译器可能会误判为不同文件。
+
+
+
+### 对比
+
+| 特性             | `#ifndef/#define/#endif`     | `#pragma once`                               |
+| ---------------- | ---------------------------- | -------------------------------------------- |
+| **是否标准**     | ✅ 属于 C/C++ 标准            | ❌ 非标准，但主流编译器都支持                 |
+| **兼容性**       | ✅ 所有编译器都支持           | ⚠️ 极老编译器可能不支持                       |
+| **书写简洁性**   | ❌ 需要写三行宏，宏名必须唯一 | ✅ 一行即可                                   |
+| **命名冲突风险** | ⚠️ 宏名需小心，可能冲突       | ✅ 无命名冲突                                 |
+| **可读性**       | 中等，需要检查宏名           | 高，可一眼看出作用                           |
+| **编译速度**     | 稍慢（需检查宏定义）         | **稍快**（编译器直接标记文件已处理）         |
+| **路径敏感问题** | 不受路径影响                 | 某些编译器可能因软链接/不同路径 include 误判 |
+| **实际项目使用** | 常见于老代码库、跨平台库     | **新项目、现代 C++ 项目普遍采用**            |
+
+- 如果项目 **要兼容非常老的编译器**（例如嵌入式场景），建议用 `#ifndef/#define/#endif`。
+- 如果项目主要在 **现代 Linux/Windows 环境下开发**（RPC 项目大多如此），直接用 `#pragma once` 更简洁、错误率更低。
+
+很多新项目（尤其是 C++20 之后）基本都统一用 `#pragma once`。
+
+
+
+
 
 
 
@@ -1191,6 +1424,71 @@ int main() {
 3. **类型安全的常量定义**：避免用宏 `#define`。
 
 4. **泛型编程与模板元编程**：结合 `if constexpr` 优化分支裁剪。
+
+
+
+
+
+# STL
+
+## 容器插入 push/push_back/insert
+
+![image-20251007171339880](./pic/image-20251007171339880.png)
+
+
+
+**总结**
+
+- **`push_back`** → 顺序容器（`vector`、`deque`、`list`），往后加。
+- **`push_front`** → 双端容器（`deque`、`list`、`forward_list`）。
+- **`push`** → 容器适配器（`stack`、`queue`、`priority_queue`）。
+- **`insert`** → 关联容器（有序的 `map/set`，无序的 `unordered_map/set`）。
+
+
+
+
+
+## string
+
+
+
+
+
+### **关于 `stringstream` 与 `getline`** 
+
+`stringstream` C++ 标准库中的一种**字符串流对象**，属于 `<iostream>` 的扩展。
+
+让字符串可以像文件流、输入流那样被逐段读取
+
+~~~C++
+string ver = "1.0.3";
+stringstream ss(ver);
+~~~
+
+此时 `ss` 就像一个“输入流”，内容为 `"1.0.3"`。
+
+`getline()` 函数原型：
+
+~~~C++
+istream& getline(istream& is, string& str, char delim);
+// 					输入流is					分隔符
+~~~
+
+- 从输入流 `is`（这里是 `stringstream ss`）中读取字符；
+- 遇到分隔符 `delim`（这里是 `'.'`）或文件结束符就停止；
+- 把读到的内容放入 `str`；不会把分隔符本身写入 `str`。
+
+例如：
+
+~~~C++
+string ver = "1.10.3";
+stringstream ss(ver);
+string num;
+
+while (getline(ss, num, '.')) { // 把读到的以'.'为分隔的数，放进num
+    cout << num << endl;
+}
+~~~
 
 
 
